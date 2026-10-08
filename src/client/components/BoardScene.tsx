@@ -601,7 +601,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
       <OrbitControls
         makeDefault
         minDistance={9}
-        maxDistance={24}
+        maxDistance={46}
         minPolarAngle={0.45}
         maxPolarAngle={1.2}
         target={[0, 0, 0]}
