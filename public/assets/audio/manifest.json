@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-10-08",
+  "source": "https://www.haimian.com/create?auto_create=1&thread_id=9167568018946",
+  "direction": "Bright, cheerful tropical tabletop adventure; urgency comes from tempo and rhythmic density, never horror or tragedy.",
+  "active": {
+    "lobby": "lobby-1.m4a",
+    "exploration": "exploration-1.m4a",
+    "crisis": "crisis-1.m4a",
+    "finale": "finale-1.m4a",
+    "ambience": "ocean-ambience.m4a",
+    "dice": "sfx-dice.m4a",
+    "attack": "sfx-attack.m4a",
+    "kaiju": "sfx-kaiju.m4a"
+  },
+  "alternates": [
+    "lobby-2.m4a",
+    "exploration-2.m4a",
+    "crisis-2.m4a",
+    "finale-2.m4a"
+  ]
+}

@@ -28,9 +28,19 @@ body,
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
   letter-spacing: 0;
+}
+
+select {
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #eef1e9;
+  border: 1px solid #bdc9be;
+  border-radius: 4px;
 }
 
 button {
@@ -422,6 +432,12 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.ai-add-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
 .quiet-command {
   margin: 18px auto 0;
   color: #617579;
@@ -594,6 +610,49 @@ button:disabled {
   border-bottom: 4px solid var(--gold);
 }
 
+.turn-actions.setup-prompt strong {
+  color: #a43f35;
+  font-size: 15px;
+}
+
+.ability-panel {
+  position: absolute;
+  z-index: 6;
+  left: 16px;
+  bottom: 20px;
+  width: 250px;
+  padding: 12px;
+  color: var(--ink);
+  background: rgba(244, 239, 224, 0.94);
+  border-radius: 7px;
+  box-shadow: 0 14px 38px rgba(0, 18, 24, 0.24);
+}
+
+.ability-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ability-list button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #24474c;
+  background: #dce4da;
+  border: 1px solid #c4cfc4;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ability-list button.active {
+  color: white;
+  background: #1f7773;
+  border-color: #165957;
+}
+
 .private-score {
   position: absolute;
   z-index: 5;
@@ -621,6 +680,138 @@ button:disabled {
 .result-panel p {
   margin-bottom: 20px;
   color: #607579;
+}
+
+.response-panel {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  bottom: 88px;
+  display: grid;
+  width: min(420px, calc(100vw - 32px));
+  gap: 8px;
+  padding: 18px;
+  color: var(--ink);
+  background: rgba(255, 246, 214, 0.98);
+  border: 2px solid var(--gold);
+  border-radius: 7px;
+  box-shadow: 0 18px 50px rgba(0, 18, 24, 0.35);
+  transform: translateX(-50%);
+}
+
+.response-panel span {
+  color: #5d7072;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.response-panel > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.boarding-panel {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  bottom: 88px;
+  display: grid;
+  width: min(460px, calc(100vw - 32px));
+  gap: 10px;
+  padding: 16px;
+  color: var(--ink);
+  background: rgba(244, 239, 224, 0.98);
+  border: 2px solid var(--teal);
+  border-radius: 7px;
+  box-shadow: 0 18px 50px rgba(0, 18, 24, 0.35);
+  transform: translateX(-50%);
+}
+
+.boarding-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 210px;
+  overflow: auto;
+}
+
+.boarding-list button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: #e0e5db;
+  border: 1px solid #c4cec3;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.boarding-list button.active {
+  color: white;
+  background: #1f7773;
+  border-color: #155a57;
+}
+
+.audio-deck {
+  position: absolute;
+  z-index: 15;
+  right: 18px;
+  top: 96px;
+}
+
+.audio-toggle {
+  color: #f4efe0;
+  background: rgba(8, 47, 57, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.audio-popover {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  width: 220px;
+  padding: 12px;
+  color: var(--ink);
+  background: rgba(244, 239, 224, 0.97);
+  border-radius: 7px;
+  box-shadow: 0 14px 38px rgba(0, 18, 24, 0.28);
+}
+
+.audio-popover header,
+.audio-popover header > span,
+.audio-popover label > span {
+  display: flex;
+  align-items: center;
+}
+
+.audio-popover header {
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.audio-popover header > span,
+.audio-popover label > span {
+  gap: 5px;
+}
+
+.audio-popover .quiet-command {
+  margin: 0;
+}
+
+.audio-popover label {
+  grid-template-columns: 54px 1fr;
+  align-items: center;
+}
+
+.audio-popover input[type="range"] {
+  height: 28px;
+  padding: 0;
+  box-shadow: none;
 }
 
 .toast {
@@ -712,5 +903,24 @@ button:disabled {
     top: auto;
     right: 8px;
     bottom: 76px;
+  }
+
+  .audio-deck {
+    top: auto;
+    right: 8px;
+    bottom: 132px;
+  }
+
+  .ability-panel {
+    right: 8px;
+    bottom: 76px;
+    left: auto;
+    width: min(190px, calc(100vw - 216px));
+    max-height: 150px;
+    overflow: auto;
+  }
+
+  .ability-list {
+    grid-template-columns: 1fr;
   }
 }

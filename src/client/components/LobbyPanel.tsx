@@ -1,17 +1,39 @@
+import { useState } from "react";
 import { Bot, Check, Copy, Eye, LogOut, Play, Plus, Radio, Trash2, Users } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
+import type { AIDifficulty, PublicRoomState, Role } from "../../shared/types";
 import { useGameStore } from "../gameStore";
 import { socket } from "../socket";
 
-export function LobbyPanel() {
-  const { clientId, role, room, showNotice, reset } = useGameStore();
-  if (!room) return null;
+export function LobbyPanel({
+  room,
+  clientId,
+  role
+}: {
+  room: PublicRoomState;
+  clientId: string | null;
+  role: Role | null;
+}) {
+  const { showNotice, reset } = useGameStore(useShallow((state) => ({
+    showNotice: state.showNotice,
+    reset: state.reset
+  })));
+  const [aiDifficulty, setAIDifficulty] = useState<AIDifficulty>("strategic");
   const me = room.players.find((player) => player.id === clientId);
   const isHost = room.hostId === clientId;
   const allReady = room.players.length >= 2 && room.players.every((player) => player.isAI || player.ready);
 
-  const emitSimple = (event: "addAI" | "startGame", errorFallback: string) => {
-    socket.emit(event, (result) => {
-      if (!result.ok) showNotice(result.error ?? errorFallback);
+  const startGame = () => {
+    socket.emit("startGame", (result) => {
+      if (!result.ok) showNotice(result.error ?? "无法开始");
+      else window.location.reload();
+    });
+  };
+
+  const addAI = () => {
+    socket.emit("addAI", aiDifficulty, (result) => {
+      if (!result.ok) showNotice(result.error ?? "添加 AI 失败");
+      else window.location.reload();
     });
   };
 
@@ -57,7 +79,10 @@ export function LobbyPanel() {
               <button
                 className="icon-button small"
                 title="移除 AI"
-                onClick={() => socket.emit("removeAI", player.id, (result) => !result.ok && showNotice(result.error ?? "移除失败"))}
+                onClick={() => socket.emit("removeAI", player.id, (result) => {
+                  if (!result.ok) showNotice(result.error ?? "移除失败");
+                  else window.location.reload();
+                })}
               >
                 <Trash2 size={16} />
               </button>
@@ -75,19 +100,31 @@ export function LobbyPanel() {
 
       <div className="panel-actions">
         {role === "player" && me && (
-          <button className={me.ready ? "secondary-command" : "primary-command"} onClick={() => socket.emit("setReady", !me.ready, () => undefined)}>
+          <button
+            className={me.ready ? "secondary-command" : "primary-command"}
+            onClick={() => socket.emit("setReady", !me.ready, (result) => {
+              if (!result.ok) showNotice(result.error ?? "无法切换准备状态");
+              else window.location.reload();
+            })}
+          >
             <Check size={18} />
             {me.ready ? "取消准备" : "准备"}
           </button>
         )}
         {isHost && room.players.length < 5 && (
-          <button className="secondary-command" onClick={() => emitSimple("addAI", "添加 AI 失败")}>
-            <Plus size={18} />
-            添加 AI
-          </button>
+          <div className="ai-add-control">
+            <select value={aiDifficulty} onChange={(event) => setAIDifficulty(event.target.value as AIDifficulty)} aria-label="AI 难度">
+              <option value="strategic">策略 AI</option>
+              <option value="casual">休闲 AI</option>
+            </select>
+            <button className="secondary-command" onClick={addAI}>
+              <Plus size={18} />
+              添加 AI
+            </button>
+          </div>
         )}
         {isHost && (
-          <button className="primary-command" disabled={!allReady} onClick={() => emitSimple("startGame", "无法开始")}>
+          <button className="primary-command" disabled={!allReady} onClick={startGame}>
             <Play size={18} />
             开始远征
           </button>
