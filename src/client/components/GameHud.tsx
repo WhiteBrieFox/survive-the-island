@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
-  Navigation, RotateCcw, Shield, Users, Waves
+  LogOut, Navigation, RotateCcw, Shield, Users, Waves
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { AbilityType, PublicRoomState, Role } from "../../shared/types";
@@ -84,6 +84,21 @@ export function GameHud({
     setActiveAbility(activeAbility === ability ? null : ability);
   };
 
+  const leaveGame = () => {
+    const message = room.phase === "playing"
+      ? "退出后你的席位将交给 AI 托管，确定退出吗？"
+      : "确定退出当前房间吗？";
+    if (!window.confirm(message)) return;
+    socket.emit("leaveRoom", (result) => {
+      if (!result.ok) {
+        showNotice(result.error ?? "退出失败");
+        return;
+      }
+      localStorage.removeItem("island-reconnect-token");
+      window.location.reload();
+    });
+  };
+
   return (
     <>
       <header className="game-topbar">
@@ -107,6 +122,9 @@ export function GameHud({
           <span><Flame size={16} />{room.volcanoes}/{room.maxVolcanoes}</span>
           {role === "spectator" && <span><Eye size={16} />观战</span>}
         </div>
+        <button className="icon-button game-exit" title="退出房间" aria-label="退出房间" onClick={leaveGame}>
+          <LogOut size={18} />
+        </button>
       </header>
 
       <aside className="score-panel">

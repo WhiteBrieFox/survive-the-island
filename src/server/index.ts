@@ -20,6 +20,7 @@ import {
   placeExplorer,
   placeRaft,
   publicState,
+  recordEvent,
   resolveBoarding,
   resolveDisplacement,
   respondRepellent,
@@ -453,12 +454,28 @@ io.on("connection", (socket) => {
       if (player && room.phase === "lobby") {
         room.players = room.players.filter((candidate) => candidate.id !== playerId);
         delete room.reconnectTokens[player.id];
+        if (room.hostId === player.id) {
+          const nextHost = room.players.find((candidate) => !candidate.isAI);
+          if (nextHost) room.hostId = nextHost.id;
+        }
+      } else if (player) {
+        player.connected = false;
+        delete room.reconnectTokens[player.id];
+        if (room.phase === "playing") {
+          player.isAI = true;
+          recordEvent(room, "player-autopilot", `${player.name} 离开了游戏，席位已交给 AI 托管`, player.id);
+        }
       }
       socketRooms.delete(socket.id);
       socketPlayers.delete(socket.id);
       socketSpectators.delete(socket.id);
       if (playerId) playerSockets.delete(playerId);
       socket.leave(room.code);
+      if (room.phase === "lobby" && !room.players.some((candidate) => !candidate.isAI)) {
+        rooms.delete(room.code);
+        persistRooms();
+        return undefined;
+      }
       bump(room);
       broadcast(room);
       return undefined;
