@@ -61,6 +61,7 @@ export function App() {
           <BoardScene room={room} />
         </Canvas>
       </div>
+      {!room && <div className="main-menu-art" aria-hidden="true" />}
 
       {!room ? (
         <section className="entry-panel" aria-label="加入游戏">

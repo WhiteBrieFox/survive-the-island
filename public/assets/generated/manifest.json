@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-10-08",
+  "source": "https://mira.byteintl.net/chat/883804875795",
+  "assets": [
+    {
+      "file": "main-menu-key-art.png",
+      "purpose": "Main menu and loading background",
+      "model": "Gpt Image 2",
+      "promptFile": "../../../docs/generation-prompts.md",
+      "status": "approved"
+    }
+  ]
+}

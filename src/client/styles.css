@@ -49,6 +49,15 @@ button {
   inset: 0;
 }
 
+.main-menu-art {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background-image: url("/assets/generated/main-menu-key-art.png");
+  background-position: center;
+  background-size: cover;
+}
+
 .entry-panel,
 .lobby-panel,
 .result-panel {
@@ -65,6 +74,47 @@ button {
   border-radius: 8px;
   box-shadow: 0 24px 70px rgba(0, 17, 22, 0.36);
   backdrop-filter: blur(12px);
+}
+
+.entry-panel {
+  color: #f9f5e8;
+  background: rgba(8, 35, 42, 0.9);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.entry-panel .eyebrow,
+.entry-panel label > span,
+.entry-panel .entry-meta {
+  color: #bfd6d5;
+}
+
+.entry-panel input {
+  color: #f9f5e8;
+  background: rgba(4, 27, 33, 0.78);
+  border-color: rgba(215, 238, 232, 0.35);
+}
+
+.entry-panel input::placeholder {
+  color: #8faaa9;
+}
+
+.entry-panel .role-switch {
+  background: rgba(3, 24, 29, 0.72);
+}
+
+.entry-panel .role-switch button {
+  color: #a8c0c0;
+}
+
+.entry-panel .role-switch button.active {
+  color: #102f35;
+  background: #f4efe0;
+}
+
+.entry-panel .secondary-command {
+  color: #f4efe0;
+  background: #1f6d6e;
+  box-shadow: 0 4px 0 #144849;
 }
 
 .brand-lockup,

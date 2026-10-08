@@ -29,6 +29,8 @@ pnpm dev
 - [美术与音频方案](docs/asset-audio-plan.md)
 - [待确认事项](docs/decisions.md)
 - [实现状态](docs/implementation-status.md)
+- [正式版验收标准](docs/production-acceptance.md)
+- [AI 资产生成提示词](docs/generation-prompts.md)
 
 ## 当前状态
 
