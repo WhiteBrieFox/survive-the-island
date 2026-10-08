@@ -1,0 +1,23 @@
+{
+  "provider": "Mira / Gpt Image 2",
+  "session": "https://mira.byteintl.net/chat/883804875795",
+  "generatedAt": "2026-10-08",
+  "promptSource": "../../docs/mira-3d-prompts.md",
+  "assets": [
+    {
+      "file": "explorer-turnaround.png",
+      "purpose": "Explorer orthographic modeling reference",
+      "status": "approved"
+    },
+    {
+      "file": "shark-turnaround.png",
+      "purpose": "Shark orthographic modeling reference",
+      "status": "approved"
+    },
+    {
+      "file": "tropical-trees-turnaround.png",
+      "purpose": "Tropical tree set modeling reference",
+      "status": "approved"
+    }
+  ]
+}
