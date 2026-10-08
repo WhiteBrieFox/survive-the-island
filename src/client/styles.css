@@ -620,37 +620,126 @@ button:disabled {
   z-index: 6;
   left: 16px;
   bottom: 20px;
-  width: 250px;
+  width: 310px;
   padding: 12px;
   color: var(--ink);
-  background: rgba(244, 239, 224, 0.94);
+  background: rgba(238, 244, 236, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: 7px;
   box-shadow: 0 14px 38px rgba(0, 18, 24, 0.24);
 }
 
-.ability-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.ability-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 3px 10px;
+  color: #3f6267;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ability-heading > span {
+  display: inline-flex;
+  align-items: center;
   gap: 7px;
 }
 
-.ability-list button {
-  display: flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: #24474c;
-  background: #dce4da;
-  border: 1px solid #c4cfc4;
-  border-radius: 4px;
-  cursor: pointer;
+.ability-heading b {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: white;
+  background: #1f7773;
+  border-radius: 50%;
 }
 
-.ability-list button.active {
+.ability-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ability-list .ability-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 76px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  overflow: hidden;
+  text-align: left;
+  color: #24474c;
+  background: #f8faf4;
+  border: 1px solid #c7d4c8;
+  border-left: 4px solid #3c9b8a;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 3px 9px rgba(24, 65, 68, 0.08);
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.ability-list .ability-card:hover {
+  border-color: #6aa99c;
+  transform: translateY(-1px);
+}
+
+.ability-list .ability-card.active {
   color: white;
   background: #1f7773;
   border-color: #165957;
+}
+
+.ability-icon {
+  display: grid;
+  width: 40px;
+  height: 48px;
+  place-items: center;
+  color: #fff8df;
+  background: #2a7f78;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.ability-paddles { border-left-color: #c4833d !important; }
+.ability-paddles .ability-icon { background: #a96831; }
+.ability-dolphin { border-left-color: #168aa0 !important; }
+.ability-dolphin .ability-icon { background: #14788a; }
+.ability-dive { border-left-color: #526db1 !important; }
+.ability-dive .ability-icon { background: #465f9f; }
+.ability-creature-die { border-left-color: #b05b57 !important; }
+.ability-creature-die .ability-icon { background: #98504d; }
+.ability-repellent { border-left-color: #50925a !important; }
+.ability-repellent .ability-icon { background: #447d4d; }
+
+.ability-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ability-copy strong {
+  font-size: 13px;
+}
+
+.ability-copy > span {
+  color: #526e70;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ability-copy small {
+  overflow: hidden;
+  color: #7c8f8e;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ability-card.active .ability-copy > span,
+.ability-card.active .ability-copy small {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .private-score {
@@ -876,11 +965,30 @@ button:disabled {
   .score-panel {
     top: 76px;
     left: 8px;
-    width: 190px;
+    width: 174px;
+    padding: 8px;
   }
 
   .score-row {
-    min-height: 41px;
+    min-height: 36px;
+    gap: 7px;
+    padding: 5px;
+  }
+
+  .score-row strong {
+    font-size: 12px;
+  }
+
+  .score-row span {
+    font-size: 9px;
+  }
+
+  .score-row b {
+    font-size: 15px;
+  }
+
+  .score-heading {
+    padding-bottom: 6px;
   }
 
   .event-panel {
@@ -906,21 +1014,39 @@ button:disabled {
   }
 
   .audio-deck {
-    top: auto;
+    top: 76px;
     right: 8px;
-    bottom: 132px;
+    bottom: auto;
   }
 
   .ability-panel {
     right: 8px;
     bottom: 76px;
     left: auto;
-    width: min(190px, calc(100vw - 216px));
-    max-height: 150px;
+    width: min(220px, calc(100vw - 196px));
+    max-height: 190px;
     overflow: auto;
   }
 
-  .ability-list {
-    grid-template-columns: 1fr;
+  .ability-list .ability-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-height: 72px;
+    padding: 7px;
+  }
+
+  .ability-icon {
+    width: 32px;
+    height: 40px;
+  }
+
+  .ability-copy > span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .ability-copy small {
+    display: none;
   }
 }

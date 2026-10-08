@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Bot, ChevronRight, Dices, Eye, Flag, Flame, Footprints, Hand, RotateCcw, Users } from "lucide-react";
+import {
+  Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
+  Navigation, RotateCcw, Shield, Users, Waves
+} from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { AbilityType, PublicRoomState, Role } from "../../shared/types";
 import { useGameStore } from "../gameStore";
@@ -52,6 +55,19 @@ export function GameHud({
   const abilityNames: Record<AbilityType, string> = {
     paddles: "船桨", dolphin: "海豚", dive: "潜水", "creature-die": "生物骰", repellent: "驱逐剂"
   };
+  const abilityDetails: Record<AbilityType, { description: string; hint: string; icon: typeof Dices }> = {
+    paddles: { description: "将你能控制的木筏移动最多 2 格。", hint: "选牌后选择木筏与目标水域", icon: Navigation },
+    dolphin: { description: "将一名游泳者移动最多 2 格。", hint: "选牌后选择游泳者与目标格", icon: Fish },
+    dive: { description: "将任意一只海洋生物移至空水域。", hint: "选牌后选择生物与目标水域", icon: Waves },
+    "creature-die": { description: "重新掷一次本回合的生物骰。", hint: "点击立即使用", icon: Dices },
+    repellent: { description: "受到生物攻击时移除攻击者并保护同格单位。", hint: "攻击响应阶段使用", icon: Shield }
+  };
+  const abilityGroups = me?.abilities.reduce<Array<{ ability: AbilityType; count: number }>>((groups, ability) => {
+    const existing = groups.find((group) => group.ability === ability);
+    if (existing) existing.count += 1;
+    else groups.push({ ability, count: 1 });
+    return groups;
+  }, []) ?? [];
   const nextExplorer = room.explorers.find((explorer) => explorer.ownerId === clientId && !explorer.locationId && !explorer.lost && !explorer.rescued);
 
   const activateAbility = (ability: AbilityType) => {
@@ -60,9 +76,6 @@ export function GameHud({
       return;
     }
     if (ability === "repellent") return showNotice("驱逐剂会在受到攻击时自动出现响应按钮");
-    if (ability === "paddles" && !selectedRaftId) return showNotice("先选择一艘木筏");
-    if (ability === "dolphin" && !selectedExplorerId) return showNotice("先选择一名游泳者");
-    if (ability === "dive" && !selectedCreatureId) return showNotice("先选择一个生物");
     setActiveAbility(activeAbility === ability ? null : ability);
   };
 
@@ -250,19 +263,32 @@ export function GameHud({
 
       {me && me.abilities.length > 0 && room.phase === "playing" && (
         <aside className="ability-panel">
-          <div className="score-heading"><Hand size={17} />能力</div>
+          <div className="ability-heading">
+            <span><Hand size={17} />能力牌</span>
+            <b>{me.abilities.length}</b>
+          </div>
           <div className="ability-list">
-            {me.abilities.filter((ability) => ability !== "repellent").map((ability, index) => (
-              <button
-                key={`${ability}-${index}`}
-                className={activeAbility === ability ? "active" : ""}
-                onClick={() => activateAbility(ability)}
-                title={`使用${abilityNames[ability]}`}
-              >
-                <Dices size={16} />
-                {abilityNames[ability]}
-              </button>
-            ))}
+            {abilityGroups.map(({ ability, count }) => {
+              const detail = abilityDetails[ability];
+              const Icon = detail.icon;
+              const unavailable = ability === "repellent" && !canRespondRepellent;
+              return (
+                <button
+                  key={ability}
+                  className={`ability-card ability-${ability} ${activeAbility === ability ? "active" : ""}`}
+                  onClick={() => activateAbility(ability)}
+                  aria-pressed={activeAbility === ability}
+                  title={detail.hint}
+                >
+                  <span className="ability-icon"><Icon size={19} /></span>
+                  <span className="ability-copy">
+                    <strong>{abilityNames[ability]}{count > 1 ? ` ×${count}` : ""}</strong>
+                    <span>{detail.description}</span>
+                    <small>{unavailable ? "等待攻击响应" : detail.hint}</small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </aside>
       )}

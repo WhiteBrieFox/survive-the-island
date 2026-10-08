@@ -30,10 +30,30 @@ function Ocean() {
     mesh.current.rotation.z = Math.sin(clock.elapsedTime * 0.09) * 0.015;
   });
   return (
-    <mesh ref={mesh} rotation-x={-Math.PI / 2} receiveShadow>
-      <circleGeometry args={[18, 96]} />
-      <meshStandardMaterial color="#1687a0" roughness={0.2} metalness={0.12} transparent opacity={0.9} />
-    </mesh>
+    <group>
+      <mesh ref={mesh} rotation-x={-Math.PI / 2} receiveShadow>
+        <circleGeometry args={[19, 128]} />
+        <meshPhysicalMaterial
+          color="#149bb2"
+          roughness={0.16}
+          metalness={0.08}
+          clearcoat={0.72}
+          clearcoatRoughness={0.2}
+          transparent
+          opacity={0.94}
+        />
+      </mesh>
+      <mesh rotation-x={-Math.PI / 2} position-y={-0.5}>
+        <circleGeometry args={[20, 96]} />
+        <meshStandardMaterial color="#064b64" roughness={0.72} />
+      </mesh>
+      {[7.8, 11.8, 15.8].map((radius) => (
+        <mesh key={radius} rotation-x={-Math.PI / 2} position-y={-0.39}>
+          <ringGeometry args={[radius, radius + 0.035, 128]} />
+          <meshBasicMaterial color="#8be1df" transparent opacity={0.2} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
@@ -41,18 +61,22 @@ function TerrainDetails({ terrain }: { terrain: Terrain }) {
   if (terrain === "forest") {
     return (
       <group position={[0, 0.35, 0]}>
-        {[-0.34, 0, 0.34].map((x, index) => (
-          <group key={x} position={[x, index === 1 ? 0.08 : 0, index === 1 ? 0.06 : -0.08]}>
+        {[-0.38, -0.08, 0.28].map((x, index) => (
+          <group key={x} position={[x, index === 1 ? 0.1 : 0, index === 1 ? 0.14 : -0.1]}>
             <mesh castShadow position-y={0.1}>
-              <cylinderGeometry args={[0.045, 0.06, 0.3, 6]} />
+              <cylinderGeometry args={[0.045, 0.065, 0.3, 7]} />
               <meshStandardMaterial color="#68452d" />
             </mesh>
             <mesh castShadow position-y={0.35}>
-              <coneGeometry args={[0.22, 0.48, 7]} />
-              <meshStandardMaterial color={index === 1 ? "#176a50" : "#23815d"} />
+              <coneGeometry args={[index === 1 ? 0.26 : 0.22, index === 1 ? 0.56 : 0.46, 8]} />
+              <meshStandardMaterial color={index === 1 ? "#12684e" : "#2a8a58"} roughness={0.76} />
             </mesh>
           </group>
         ))}
+        <mesh castShadow position={[0.3, 0.08, 0.34]}>
+          <dodecahedronGeometry args={[0.13, 0]} />
+          <meshStandardMaterial color="#3b7650" roughness={0.9} />
+        </mesh>
       </group>
     );
   }
@@ -61,24 +85,34 @@ function TerrainDetails({ terrain }: { terrain: Terrain }) {
       <group position={[0, 0.35, 0]}>
         <mesh castShadow position={[-0.18, 0.2, 0]}>
           <coneGeometry args={[0.42, 0.85, 6]} />
-          <meshStandardMaterial color="#66656a" roughness={0.9} />
+          <meshStandardMaterial color="#5b6267" roughness={0.88} />
+        </mesh>
+        <mesh castShadow position={[-0.18, 0.5, 0]}>
+          <coneGeometry args={[0.18, 0.25, 6]} />
+          <meshStandardMaterial color="#e9f0ed" roughness={0.72} />
         </mesh>
         <mesh castShadow position={[0.24, 0.1, 0.08]}>
           <coneGeometry args={[0.3, 0.62, 6]} />
-          <meshStandardMaterial color="#89878c" roughness={0.9} />
+          <meshStandardMaterial color="#7d8588" roughness={0.9} />
         </mesh>
       </group>
     );
   }
   return (
-    <group position={[0, 0.3, 0]}>
-      <mesh castShadow rotation-z={-0.14}>
-        <cylinderGeometry args={[0.06, 0.08, 0.55, 7]} />
+    <group position={[0, 0.27, 0]}>
+      <mesh castShadow rotation-z={-0.22}>
+        <cylinderGeometry args={[0.05, 0.075, 0.52, 8]} />
         <meshStandardMaterial color="#775039" />
       </mesh>
-      <mesh castShadow position={[0.13, 0.24, 0]}>
-        <sphereGeometry args={[0.2, 8, 6]} />
-        <meshStandardMaterial color="#2a8d62" />
+      {[[-0.16, 0.21, 0], [0.1, 0.29, 0.03], [0.24, 0.18, -0.02]].map((position, index) => (
+        <mesh key={index} castShadow position={position as [number, number, number]} rotation-z={index === 0 ? -0.55 : index === 2 ? 0.55 : 0}>
+          <sphereGeometry args={[0.17, 9, 6]} />
+          <meshStandardMaterial color={index === 1 ? "#217d58" : "#36a468"} roughness={0.78} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[-0.38, -0.16, 0.26]}>
+        <dodecahedronGeometry args={[0.12, 0]} />
+        <meshStandardMaterial color="#d7a95e" roughness={0.9} />
       </mesh>
     </group>
   );
@@ -144,6 +178,10 @@ function Tile({
           emissiveIntensity={highlighted ? 0.6 : selected ? 0.35 : 0}
         />
       </mesh>
+      <mesh position-y={tile.terrain === "mountain" ? -0.25 : -0.19} receiveShadow>
+        <cylinderGeometry args={[1.04, 0.92, 0.18, 6]} />
+        <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
+      </mesh>
       <TerrainDetails terrain={tile.terrain} />
       {(highlighted || selected) && (
         <mesh rotation-x={-Math.PI / 2} position-y={0.28}>
@@ -179,7 +217,7 @@ function Explorer({
   return (
     <Float speed={selected ? 4 : 1.4} rotationIntensity={0} floatIntensity={selected ? 0.2 : 0.05}>
       <group
-        position={[x + Math.cos(angle) * radius, 0.58, z + Math.sin(angle) * radius]}
+        position={[x + Math.cos(angle) * radius, explorer.raftId ? 0.48 : explorer.swimming ? 0.12 : 0.58, z + Math.sin(angle) * radius]}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
@@ -187,7 +225,7 @@ function Explorer({
         scale={selected ? 1.18 : 1}
       >
         <mesh castShadow position-y={0.12}>
-          <cylinderGeometry args={[0.13, 0.19, 0.38, 8]} />
+          <cylinderGeometry args={[0.13, 0.2, 0.4, 10]} />
           <meshStandardMaterial color={color} roughness={0.55} />
         </mesh>
         <mesh castShadow position-y={0.38}>
@@ -197,6 +235,10 @@ function Explorer({
         <mesh castShadow position={[0, 0.49, 0]}>
           <cylinderGeometry args={[0.2, 0.15, 0.09, 12]} />
           <meshStandardMaterial color={color} />
+        </mesh>
+        <mesh castShadow position={[0.12, 0.17, 0.03]} rotation-z={-0.24}>
+          <boxGeometry args={[0.12, 0.26, 0.12]} />
+          <meshStandardMaterial color="#d59b45" roughness={0.82} />
         </mesh>
         <mesh receiveShadow position-y={-0.11}>
           <cylinderGeometry args={[0.25, 0.28, 0.08, 14]} />
@@ -226,21 +268,35 @@ function RaftPiece({ raft, space, selected, onClick }: { raft: RaftView; space: 
   const { x, z } = hexToWorld(space);
   return (
     <group
-      position={[x, 0.03, z]}
+      position={[x, -0.02, z]}
       rotation-y={0.35}
       scale={selected ? 1.12 : 1}
       onClick={(event) => { event.stopPropagation(); onClick(); }}
     >
-      {[-0.2, 0, 0.2].map((offset) => (
-        <mesh key={offset} position={[offset, 0, 0]} castShadow>
-          <cylinderGeometry args={[0.09, 0.09, 0.85, 8]} />
-          <meshStandardMaterial color="#8a552f" roughness={0.9} />
+      {[-0.3, -0.1, 0.1, 0.3].map((offset, index) => (
+        <mesh key={offset} position={[offset, 0.08, 0]} rotation-x={Math.PI / 2} castShadow>
+          <cylinderGeometry args={[0.095, 0.11, 1.05, 10]} />
+          <meshStandardMaterial color={index % 2 ? "#a86a34" : "#87502c"} roughness={0.92} />
         </mesh>
       ))}
-      <mesh position-y={0.09} castShadow>
-        <boxGeometry args={[0.72, 0.06, 0.6]} />
-        <meshStandardMaterial color="#b77a43" roughness={0.85} />
-      </mesh>
+      {[-0.27, 0.27].map((zOffset) => (
+        <mesh key={zOffset} position={[0, 0.18, zOffset]} castShadow>
+          <boxGeometry args={[0.86, 0.07, 0.08]} />
+          <meshStandardMaterial color="#d09a55" roughness={0.86} />
+        </mesh>
+      ))}
+      {[-0.28, 0.28].map((xOffset) => (
+        <mesh key={xOffset} position={[xOffset, 0.2, 0]}>
+          <torusGeometry args={[0.11, 0.025, 6, 16]} />
+          <meshStandardMaterial color="#e6c47b" roughness={1} />
+        </mesh>
+      ))}
+      {selected && (
+        <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+          <ringGeometry args={[0.68, 0.82, 24]} />
+          <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -255,12 +311,50 @@ function CreaturePiece({ creature, space, selected, onClick }: { creature: Creat
         scale={selected ? 1.2 : 1}
         onClick={(event) => { event.stopPropagation(); onClick(); }}
       >
-        <mesh castShadow rotation-z={creature.type === "sea-serpent" ? 0.8 : 0}>
-          {creature.type === "kaiju" ? <dodecahedronGeometry args={[0.42, 0]} /> :
-            creature.type === "shark" ? <coneGeometry args={[0.26, 0.8, 7]} /> :
-              <torusGeometry args={[0.32, 0.1, 7, 18, Math.PI * 1.5]} />}
-          <meshStandardMaterial color={color} roughness={0.55} />
-        </mesh>
+        {creature.type === "shark" ? (
+          <group rotation-y={-0.5}>
+            <mesh castShadow rotation-z={Math.PI / 2}>
+              <coneGeometry args={[0.25, 0.85, 10]} />
+              <meshStandardMaterial color={color} roughness={0.5} />
+            </mesh>
+            <mesh castShadow position={[0, 0.22, 0]} rotation-z={Math.PI}>
+              <coneGeometry args={[0.16, 0.3, 5]} />
+              <meshStandardMaterial color="#146b60" roughness={0.56} />
+            </mesh>
+          </group>
+        ) : creature.type === "sea-serpent" ? (
+          <group>
+            {[-0.3, 0, 0.28].map((offset, index) => (
+              <mesh key={offset} castShadow position={[offset, index === 1 ? 0.18 : 0, 0]}>
+                <sphereGeometry args={[index === 1 ? 0.22 : 0.17, 12, 8]} />
+                <meshStandardMaterial color={index === 1 ? "#ef6b55" : color} roughness={0.52} />
+              </mesh>
+            ))}
+            <mesh castShadow position={[0, 0.42, 0]}>
+              <dodecahedronGeometry args={[0.24, 0]} />
+              <meshStandardMaterial color="#ef6b55" roughness={0.5} />
+            </mesh>
+          </group>
+        ) : (
+          <group>
+            <mesh castShadow>
+              <dodecahedronGeometry args={[0.43, 1]} />
+              <meshStandardMaterial color={color} roughness={0.58} />
+            </mesh>
+            {[-0.24, 0.24].map((offset) => (
+              <mesh key={offset} castShadow position={[offset, 0.38, 0]} rotation-z={offset < 0 ? 0.45 : -0.45}>
+                <coneGeometry args={[0.1, 0.32, 7]} />
+                <meshStandardMaterial color="#d7e8e3" roughness={0.68} />
+              </mesh>
+            ))}
+          </group>
+        )}
+        {selected && (
+          <mesh rotation-x={-Math.PI / 2} position-y={-0.12}>
+            <ringGeometry args={[0.5, 0.64, 28]} />
+            <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
+          </mesh>
+        )}
       </group>
     </Float>
   );
@@ -424,13 +518,22 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     }
   };
 
+  const handleRaftClick = (raft: RaftView) => {
+    if (!room || !myTurn || room.turnPhase !== "action") return;
+    if (selectedExplorerId && moveTargets.has(raft.locationId)) {
+      handleTarget(raft.locationId);
+      return;
+    }
+    selectRaft(raft.id === selectedRaftId ? null : raft.id);
+  };
+
   return (
     <>
-      <color attach="background" args={["#082f39"]} />
-      <fog attach="fog" args={["#082f39", 18, 34]} />
-      <ambientLight intensity={1.35} />
-      <directionalLight position={[8, 14, 6]} intensity={2.4} castShadow shadow-mapSize={[2048, 2048]} />
-      <hemisphereLight args={["#bfe7ec", "#174336", 1]} />
+      <color attach="background" args={["#063f52"]} />
+      <fog attach="fog" args={["#0a5063", 20, 38]} />
+      <ambientLight intensity={1.08} />
+      <directionalLight position={[8, 14, 6]} intensity={2.8} color="#fff4d5" castShadow shadow-mapSize={[2048, 2048]} />
+      <hemisphereLight args={["#d9fbf5", "#174336", 1.28]} />
       <Ocean />
       <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color="#bdeff2" position-y={0.1} />
       {room?.tiles.length ? (
@@ -450,7 +553,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
           {room.rafts.map((raft) => {
             const space = allSpaces.find((item) => item.id === raft.locationId);
             if (!space) return null;
-            return <RaftPiece key={raft.id} raft={raft} space={space} selected={raft.id === selectedRaftId} onClick={() => myTurn && room.turnPhase === "action" && selectRaft(raft.id === selectedRaftId ? null : raft.id)} />;
+            return <RaftPiece key={raft.id} raft={raft} space={space} selected={raft.id === selectedRaftId} onClick={() => handleRaftClick(raft)} />;
           })}
           {room.creatures.map((creature) => {
             const space = allSpaces.find((item) => item.id === creature.locationId);
@@ -473,13 +576,17 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
               explorer.ownerId === clientId &&
               !explorer.lost &&
               !explorer.rescued &&
-              Boolean(explorer.tileId);
+              Boolean(explorer.tileId) &&
+              (!activeAbility || activeAbility !== "dolphin" || explorer.swimming);
+            const locationIndex = room.explorers
+              .filter((item) => item.locationId === explorer.locationId && !item.lost && !item.rescued)
+              .findIndex((item) => item.id === explorer.id);
             return (
               <Explorer
                 key={explorer.id}
                 explorer={explorer}
                 color={colorMap[explorer.color]}
-                index={index}
+                index={locationIndex >= 0 ? locationIndex : index}
                 selected={explorer.id === selectedExplorerId}
                 tiles={allSpaces as TileView[]}
                 onClick={() => selectable && selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id)}

@@ -113,7 +113,10 @@ export function App() {
           shadows
           dpr={[1, 1.6]}
           frameloop={room && !reducedMotion ? "always" : "demand"}
-          camera={{ position: [10, 12, 13], fov: 42 }}
+          camera={{
+            position: window.innerWidth <= 760 ? [14, 17, 18] : [10, 12, 13],
+            fov: window.innerWidth <= 760 ? 48 : 42
+          }}
         >
           <BoardScene room={room} />
         </Canvas>

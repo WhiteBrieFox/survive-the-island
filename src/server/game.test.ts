@@ -117,6 +117,29 @@ describe("complete game core", () => {
     expect(() => moveExplorer(room, "host", explorer.id, nextWater.id)).toThrow(/已经游过一次/);
   });
 
+  it("lets an explorer move directly onto an adjacent raft", () => {
+    const room = startedRoom();
+    const explorer = room.explorers.find((candidate) => {
+      if (candidate.ownerId !== "host") return false;
+      const source = room.tiles.find((tile) => tile.id === candidate.locationId);
+      return Boolean(source && room.rafts.some((raft) => {
+        const water = room.waterSpaces.find((space) => space.id === raft.locationId);
+        return water && areAdjacent(source, water);
+      }));
+    })!;
+    const source = room.tiles.find((tile) => tile.id === explorer.locationId)!;
+    const raft = room.rafts.find((candidate) => {
+      const water = room.waterSpaces.find((space) => space.id === candidate.locationId);
+      return water && areAdjacent(source, water);
+    })!;
+
+    moveExplorer(room, "host", explorer.id, raft.locationId);
+
+    expect(explorer.raftId).toBe(raft.id);
+    expect(explorer.locationId).toBe(raft.locationId);
+    expect(explorer.swimming).toBe(false);
+  });
+
   it("keeps all three turn stages separate", () => {
     const room = startedRoom();
     endTurn(room);
