@@ -417,7 +417,7 @@ function applyEffect(room: GameRoom, playerId: string, tile: GameTile) {
   } else {
     const player = room.players.find((item) => item.id === playerId)!;
     player.abilities.push(tile.effect);
-    recordEvent(room, "ability-drawn", `${player.name} 获得${abilityName[tile.effect]}`, playerId, {
+    recordEvent(room, "ability-drawn", `${player.name} 获得了一张能力牌`, playerId, {
       ability: tile.effect
     });
   }

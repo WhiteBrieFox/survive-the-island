@@ -148,8 +148,16 @@ describe("complete game core", () => {
     sinkChosenTile(room, "host", room.tiles.find((tile) => tile.active && !tile.isRescue && tile.terrain === "beach")!.id);
     settlePendingChoices(room, "host");
     finishCreaturePhase(room, "host");
+    for (let guard = 0; guard < 30 && room.currentPlayerId === "host" && room.phase === "playing"; guard += 1) {
+      settlePendingChoices(room, "host");
+      if (room.turnPhase === "creature") finishCreaturePhase(room, "host");
+      else if (room.turnPhase === "creature-move") finishCreaturePhase(room, "host");
+    }
     expect(room.currentPlayerId).toBe("ai-1");
-    for (let guard = 0; guard < 8 && room.currentPlayerId === "ai-1"; guard += 1) runAITurn(room);
+    for (let guard = 0; guard < 100 && room.currentPlayerId === "ai-1"; guard += 1) {
+      settlePendingChoices(room, "ai-1");
+      if (room.currentPlayerId === "ai-1") runAITurn(room);
+    }
     expect(room.currentPlayerId).toBe("host");
     expect(room.round).toBe(2);
   });
@@ -167,6 +175,17 @@ describe("complete game core", () => {
     expect(hostView.events.every((event) => event.payload === undefined)).toBe(true);
     placeExplorer(room, "host", room.tiles.find((tile) => !tile.isRescue)!.id);
     expect(publicState(room, "guest").log.at(-1)).not.toMatch(/\d/);
+  });
+
+  it("keeps a drawn ability type private", () => {
+    const room = startedRoom();
+    endTurn(room);
+    const tile = room.tiles.find((candidate) => candidate.active && !candidate.isRescue && candidate.terrain === "beach")!;
+    tile.effect = "paddles";
+    sinkChosenTile(room, "host", tile.id);
+    expect(room.players.find((player) => player.id === "host")!.abilities).toContain("paddles");
+    expect(publicState(room, "guest").log.join(" ")).not.toContain("船桨");
+    expect(publicState(room, "guest").players.find((player) => player.id === "host")!.abilities).toEqual([]);
   });
 
   it("assigns both controlled colors to two-player explorer sets", () => {

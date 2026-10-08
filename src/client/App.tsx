@@ -22,11 +22,20 @@ export function App() {
   const [password, setPassword] = useState("");
   const [asSpectator, setAsSpectator] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const [liveRoom, setLiveRoom] = useState<SessionView["room"] | null>(null);
   const room = liveRoom ?? storeRoom;
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const onState = (state: PublicRoomState) => {
@@ -103,7 +112,7 @@ export function App() {
         <Canvas
           shadows
           dpr={[1, 1.6]}
-          frameloop={room ? "always" : "demand"}
+          frameloop={room && !reducedMotion ? "always" : "demand"}
           camera={{ position: [10, 12, 13], fov: 42 }}
         >
           <BoardScene room={room} />
