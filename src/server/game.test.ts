@@ -292,6 +292,26 @@ describe("complete game core", () => {
     expect(room.currentPlayerId).toBe("guest");
   });
 
+  it("allows actively skipping a creature that still has a legal move", () => {
+    const room = startedRoom();
+    const from = room.waterSpaces.find((space) =>
+      room.waterSpaces.some((target) => areAdjacent(space, target))
+    )!;
+    room.creatures.push({ id: "skipped-shark", type: "shark", locationId: from.id });
+    room.turnPhase = "creature-move";
+    room.creatureRoll = "shark";
+    room.creatureMovesRemaining = 2;
+    room.creatureMoved = false;
+    room.resumePhase = "creature";
+    room.pendingChoice = { type: "move-creature", creatureType: "shark", stepsRemaining: 2, canFinish: false };
+
+    finishCreatureMovement(room, "host");
+
+    expect(room.currentPlayerId).toBe("guest");
+    expect(room.turnPhase).toBe("action");
+    expect(room.log.some((entry) => entry.includes("主动跳过了鲨鱼移动"))).toBe(true);
+  });
+
   it("opens a repellent response before a shark attack", () => {
     const room = startedRoom();
     const target = room.waterSpaces.find((space) =>

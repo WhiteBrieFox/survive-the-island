@@ -209,14 +209,12 @@ export function GameHud({
                   ? `选择一只${rolledCreatureName}，逐格移动（剩余 ${room.pendingChoice.stepsRemaining ?? 0}）`
                   : `场上没有${rolledCreatureName}，可以跳过本次生物移动`}
               </span>
-              {(room.pendingChoice.canFinish || !hasRolledCreature) && (
-                <button
-                  className="secondary-command"
-                  onClick={() => socket.emit("finishCreatureMove", (result) => !result.ok && showNotice(result.error ?? "无法结束移动"))}
-                >
-                  {hasRolledCreature ? "结束移动" : "跳过"}
-                </button>
-              )}
+              <button
+                className="secondary-command"
+                onClick={() => socket.emit("finishCreatureMove", (result) => !result.ok && showNotice(result.error ?? "无法结束移动"))}
+              >
+                {!hasRolledCreature ? "跳过" : room.pendingChoice.canFinish ? "结束移动" : "跳过生物移动"}
+              </button>
             </>
           )}
           {room.pendingChoice?.type === "displace" && (

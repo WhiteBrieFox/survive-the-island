@@ -509,11 +509,18 @@ export function finishCreatureMovement(room: GameRoom, playerId: string) {
   requireTurn(room, playerId, "creature-move");
   if (room.pendingChoice?.type !== "move-creature") throw new Error("当前没有待移动的生物");
   if (!room.creatureMoved) {
+    const creatureType = room.pendingChoice.creatureType!;
     const movable = room.creatures.some((creature) =>
-      creature.type === room.pendingChoice?.creatureType && legalCreatureTargetIds(room, creature).length > 0
+      creature.type === creatureType && legalCreatureTargetIds(room, creature).length > 0
     );
-    if (movable) throw new Error("请选择一只生物并至少移动一格");
-    recordEvent(room, "creature-skipped", `场上没有可移动的${creatureName(room.pendingChoice.creatureType!) }，本次跳过`, playerId);
+    recordEvent(
+      room,
+      "creature-skipped",
+      movable
+        ? `玩家主动跳过了${creatureName(creatureType)}移动`
+        : `场上没有可移动的${creatureName(creatureType)}，本次跳过`,
+      playerId
+    );
   }
   finishCreatureMove(room);
   bump(room);
