@@ -530,7 +530,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   return (
     <>
       <color attach="background" args={["#063f52"]} />
-      <fog attach="fog" args={["#0a5063", 20, 38]} />
+      <fog attach="fog" args={["#0a5063", 34, 72]} />
       <ambientLight intensity={1.08} />
       <directionalLight position={[8, 14, 6]} intensity={2.8} color="#fff4d5" castShadow shadow-mapSize={[2048, 2048]} />
       <hemisphereLight args={["#d9fbf5", "#174336", 1.28]} />
