@@ -115,7 +115,7 @@ export function App() {
           frameloop={room && !reducedMotion ? "always" : "demand"}
           camera={{
             position: window.innerWidth <= 760 ? [21, 24, 27] : [14, 16, 19],
-            fov: window.innerWidth <= 760 ? 58 : 44
+            fov: window.innerWidth <= 760 ? 68 : 44
           }}
         >
           <BoardScene room={room} />
