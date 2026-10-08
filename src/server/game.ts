@@ -444,7 +444,7 @@ function startCreatureRoll(room: GameRoom, resume: TurnPhase) {
   const result = faces[Math.floor(Math.random() * faces.length)];
   room.creatureRoll = result;
   recordEvent(room, "creature-die", `生物骰掷出了${creatureName(result)}`, room.currentPlayerId ?? undefined, { result });
-  if (room.creatures.some((item) => item.type === result)) {
+  if (room.creatures.some((item) => item.type === result && legalCreatureTargetIds(room, item).length > 0)) {
     room.turnPhase = "creature-move";
     room.creatureMovesRemaining = result === "sea-serpent" ? 1 : 2;
     room.creatureMoved = false;
@@ -455,7 +455,12 @@ function startCreatureRoll(room: GameRoom, resume: TurnPhase) {
       canFinish: false
     };
     room.resumePhase = resume;
-  } else finishCreatureMove(room);
+  } else {
+    recordEvent(room, "creature-skipped", `场上没有可移动的${creatureName(result)}，本次跳过`, room.currentPlayerId ?? undefined, {
+      result
+    });
+    finishCreatureMove(room);
+  }
   bump(room);
   return result;
 }
@@ -499,9 +504,32 @@ export function moveCreature(room: GameRoom, playerId: string, creatureId: strin
 
 export function finishCreatureMovement(room: GameRoom, playerId: string) {
   requireTurn(room, playerId, "creature-move");
-  if (room.pendingChoice?.type !== "move-creature" || !room.creatureMoved) throw new Error("这只生物至少要移动一格");
+  if (room.pendingChoice?.type !== "move-creature") throw new Error("当前没有待移动的生物");
+  if (!room.creatureMoved) {
+    const movable = room.creatures.some((creature) =>
+      creature.type === room.pendingChoice?.creatureType && legalCreatureTargetIds(room, creature).length > 0
+    );
+    if (movable) throw new Error("请选择一只生物并至少移动一格");
+    recordEvent(room, "creature-skipped", `场上没有可移动的${creatureName(room.pendingChoice.creatureType!) }，本次跳过`, playerId);
+  }
   finishCreatureMove(room);
   bump(room);
+}
+
+function legalCreatureTargetIds(room: GameRoom, creature: CreatureView) {
+  const from = coord(room, creature.locationId);
+  if (!from) return [];
+  return [...room.tiles, ...room.waterSpaces].filter((target) => {
+    if (!areAdjacent(from, target)) return false;
+    const targetTile = room.tiles.find((tile) => tile.id === target.id);
+    if (targetTile?.isRescue) return false;
+    if (creature.type !== "kaiju" && !isWater(room, target.id)) return false;
+    if (creature.type !== "kaiju" && room.creatures.some((item) => item.type === "kaiju" && item.locationId === target.id)) return false;
+    if (creature.type === "kaiju" && room.creatures.some((item) =>
+      item.id !== creature.id && item.type === "kaiju" && item.locationId === target.id
+    )) return false;
+    return true;
+  }).map((target) => target.id);
 }
 
 function finishCreatureMove(room: GameRoom) {

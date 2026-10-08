@@ -52,6 +52,11 @@ export function GameHud({
     "creature-move": "移动生物"
   };
   const phaseLabel = phaseLabels[room.turnPhase];
+  const rolledCreatureName = room.pendingChoice?.creatureType === "sea-serpent"
+    ? "海蛇"
+    : room.pendingChoice?.creatureType === "shark" ? "鲨鱼" : "巨兽";
+  const hasRolledCreature = room.pendingChoice?.type === "move-creature" &&
+    room.creatures.some((creature) => creature.type === room.pendingChoice?.creatureType);
   const abilityNames: Record<AbilityType, string> = {
     paddles: "船桨", dolphin: "海豚", dive: "潜水", "creature-die": "生物骰", repellent: "驱逐剂"
   };
@@ -182,15 +187,16 @@ export function GameHud({
           {room.pendingChoice?.type === "move-creature" && (
             <>
               <span>
-                选择一只{room.pendingChoice.creatureType === "sea-serpent" ? "海蛇" : room.pendingChoice.creatureType === "shark" ? "鲨鱼" : "巨兽"}，
-                逐格移动（剩余 {room.pendingChoice.stepsRemaining ?? 0}）
+                {hasRolledCreature
+                  ? `选择一只${rolledCreatureName}，逐格移动（剩余 ${room.pendingChoice.stepsRemaining ?? 0}）`
+                  : `场上没有${rolledCreatureName}，可以跳过本次生物移动`}
               </span>
-              {room.pendingChoice.canFinish && (
+              {(room.pendingChoice.canFinish || !hasRolledCreature) && (
                 <button
                   className="secondary-command"
                   onClick={() => socket.emit("finishCreatureMove", (result) => !result.ok && showNotice(result.error ?? "无法结束移动"))}
                 >
-                  结束移动
+                  {hasRolledCreature ? "结束移动" : "跳过"}
                 </button>
               )}
             </>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { areAdjacent } from "../shared/hex";
 import {
   addPlayer, createRoom, endTurn, finishCreatureMovement, moveCreature, moveExplorer, placeExplorer, placeRaft,
@@ -150,6 +150,26 @@ describe("complete game core", () => {
     finishCreaturePhase(room, "host");
     expect(room.currentPlayerId).toBe("guest");
     expect(room.turnPhase).toBe("action");
+  });
+
+  it("automatically skips a creature roll when none of that type can move", () => {
+    const room = startedRoom();
+    endTurn(room);
+    const tile = room.tiles.find((candidate) => candidate.active && !candidate.isRescue && candidate.terrain === "beach")!;
+    tile.effect = "paddles";
+    sinkChosenTile(room, "host", tile.id);
+    expect(room.turnPhase).toBe("creature");
+
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.4);
+    try {
+      expect(rollCreatureDie(room, "host")).toBe("shark");
+    } finally {
+      random.mockRestore();
+    }
+
+    expect(room.currentPlayerId).toBe("guest");
+    expect(room.turnPhase).toBe("action");
+    expect(room.log.at(-2)).toMatch(/没有可移动的鲨鱼/);
   });
 
   it("lets AI complete setup and a full turn through normal commands", () => {
