@@ -6,7 +6,9 @@ import {
   endTurn,
   moveExplorer,
   publicState,
+  rollCreatureDie,
   runAITurn,
+  sinkChosenTile,
   startGame
 } from "./game";
 
@@ -50,14 +52,24 @@ describe("game room", () => {
   it("sinks beaches before forests and mountains", () => {
     const room = startedRoom();
     endTurn(room);
+    expect(room.turnPhase).toBe("rising");
+    const beach = room.tiles.find((tile) => tile.active && !tile.isRescue && tile.terrain === "beach")!;
+    sinkChosenTile(room, "host", beach.id);
     const sunk = room.tiles.filter((tile) => !tile.active && !tile.isRescue);
     expect(sunk).toHaveLength(1);
     expect(sunk[0].terrain).toBe("beach");
+    expect(room.turnPhase).toBe("creature");
+    rollCreatureDie(room, "host");
+    expect(room.currentPlayerId).toBe("guest");
+    expect(room.turnPhase).toBe("action");
   });
 
   it("lets a server AI complete a turn through the same rule functions", () => {
     const room = startedRoom(true);
     endTurn(room);
+    const beach = room.tiles.find((tile) => tile.active && !tile.isRescue && tile.terrain === "beach")!;
+    sinkChosenTile(room, "host", beach.id);
+    rollCreatureDie(room, "host");
     expect(room.currentPlayerId).toBe("ai-1");
     runAITurn(room);
     expect(room.currentPlayerId).toBe("host");

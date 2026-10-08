@@ -14,7 +14,9 @@ import {
   moveExplorer,
   nextAIName,
   publicState,
+  rollCreatureDie,
   runAITurn,
+  sinkChosenTile,
   startGame,
   type GameRoom
 } from "./game";
@@ -179,6 +181,26 @@ io.on("connection", (socket) => {
       endTurn(room);
       broadcast(room);
       return undefined;
+    });
+  });
+
+  socket.on("sinkTile", (tileId, ack) => {
+    safeAck(ack, () => {
+      const room = roomForSocket(socket.id);
+      if (!room) throw new Error("你不在房间中");
+      sinkChosenTile(room, socket.id, tileId);
+      broadcast(room);
+      return undefined;
+    });
+  });
+
+  socket.on("rollCreatureDie", (ack) => {
+    safeAck(ack, () => {
+      const room = roomForSocket(socket.id);
+      if (!room) throw new Error("你不在房间中");
+      const result = rollCreatureDie(room, socket.id);
+      broadcast(room);
+      return result;
     });
   });
 

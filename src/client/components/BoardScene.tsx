@@ -225,14 +225,29 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   const selectedExplorer = room?.explorers.find((explorer) => explorer.id === selectedExplorerId);
   const selectedTile = room?.tiles.find((tile) => tile.id === selectedExplorer?.tileId);
   const myTurn = room?.currentPlayerId === clientId && role === "player";
+  const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
 
   const moveTargets = useMemo(() => {
-    if (!room || !selectedTile || !myTurn) return new Set<string>();
+    if (!room || !selectedTile || !myTurn || room.turnPhase !== "action") return new Set<string>();
     return new Set(room.tiles.filter((tile) => tile.active && areAdjacent(selectedTile, tile)).map((tile) => tile.id));
   }, [myTurn, room, selectedTile]);
 
+  const sinkTargets = useMemo(() => {
+    if (!room || !myTurn || room.turnPhase !== "rising") return new Set<string>();
+    const activeIsland = room.tiles.filter((tile) => tile.active && !tile.isRescue);
+    const lowest = Math.min(...activeIsland.map((tile) => terrainRank[tile.terrain]));
+    return new Set(activeIsland.filter((tile) => terrainRank[tile.terrain] === lowest).map((tile) => tile.id));
+  }, [myTurn, room]);
+
   const handleTileClick = (tile: TileView) => {
-    if (!room || !selectedExplorerId || !moveTargets.has(tile.id)) return;
+    if (!room) return;
+    if (sinkTargets.has(tile.id)) {
+      socket.emit("sinkTile", tile.id, (result) => {
+        if (!result.ok) showNotice(result.error ?? "无法翻开这个格子");
+      });
+      return;
+    }
+    if (!selectedExplorerId || !moveTargets.has(tile.id)) return;
     socket.emit(
       "moveExplorer",
       { explorerId: selectedExplorerId, targetTileId: tile.id, revision: room.revision },
@@ -258,7 +273,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
             <Tile
               key={tile.id}
               tile={tile}
-              highlighted={moveTargets.has(tile.id)}
+              highlighted={moveTargets.has(tile.id) || sinkTargets.has(tile.id)}
               selected={selectedTile?.id === tile.id}
               onClick={() => handleTileClick(tile)}
             />
@@ -267,7 +282,12 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
             const player = room.players.find((candidate) => candidate.id === explorer.ownerId);
             if (!player) return null;
             const selectable =
-              myTurn && explorer.ownerId === clientId && !explorer.lost && !explorer.rescued && Boolean(explorer.tileId);
+              myTurn &&
+              room.turnPhase === "action" &&
+              explorer.ownerId === clientId &&
+              !explorer.lost &&
+              !explorer.rescued &&
+              Boolean(explorer.tileId);
             return (
               <Explorer
                 key={explorer.id}

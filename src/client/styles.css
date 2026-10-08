@@ -538,6 +538,12 @@ button:disabled {
   font-size: 12px;
 }
 
+.turn-actions.phase-prompt {
+  min-height: 50px;
+  padding-right: 16px;
+  border-bottom: 4px solid var(--gold);
+}
+
 .private-score {
   position: absolute;
   z-index: 5;

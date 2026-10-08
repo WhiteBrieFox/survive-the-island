@@ -9,6 +9,8 @@ export function GameHud() {
   const me = room.players.find((player) => player.id === clientId);
   const myTurn = role === "player" && room.currentPlayerId === clientId;
   const winners = room.players.filter((player) => room.winnerIds.includes(player.id));
+  const phaseLabel =
+    room.turnPhase === "action" ? "行动阶段" : room.turnPhase === "rising" ? "水位上涨" : "生物阶段";
 
   return (
     <>
@@ -23,8 +25,8 @@ export function GameHud() {
           ) : (
             <>
               {current?.isAI ? <Bot size={17} /> : <Footprints size={17} />}
-              <span>{myTurn ? "轮到你" : `${current?.name ?? "等待"} 行动`}</span>
-              <strong>{room.actionsLeft}</strong>
+              <span>{myTurn ? phaseLabel : `${current?.name ?? "等待"} · ${phaseLabel}`}</span>
+              {room.turnPhase === "action" && <strong>{room.actionsLeft}</strong>}
             </>
           )}
         </div>
@@ -59,14 +61,37 @@ export function GameHud() {
         </div>
       </aside>
 
-      {myTurn && room.phase === "playing" && (
+      {myTurn && room.phase === "playing" && room.turnPhase === "action" && (
         <div className="turn-actions">
           <span>点击己方棋子，再选择高亮相邻格</span>
           <button
             className="primary-command"
             onClick={() => socket.emit("endTurn", (result) => !result.ok && showNotice(result.error ?? "无法结束回合"))}
           >
-            结束回合
+            结束行动
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
+
+      {myTurn && room.phase === "playing" && room.turnPhase === "rising" && (
+        <div className="turn-actions phase-prompt">
+          <span>选择一个高亮的最低地势格并翻开</span>
+        </div>
+      )}
+
+      {myTurn && room.phase === "playing" && room.turnPhase === "creature" && (
+        <div className="turn-actions">
+          <span>水位结算完成，由你掷生物骰</span>
+          <button
+            className="primary-command"
+            onClick={() =>
+              socket.emit("rollCreatureDie", (result) => {
+                if (!result.ok) showNotice(result.error ?? "无法掷骰");
+              })
+            }
+          >
+            掷生物骰
             <ChevronRight size={18} />
           </button>
         </div>

@@ -31,6 +31,8 @@ export interface GameRoom {
   tiles: GameTile[];
   explorers: GameExplorer[];
   currentPlayerId: string | null;
+  turnPhase: PublicRoomState["turnPhase"];
+  creatureRoll: PublicRoomState["creatureRoll"];
   actionsLeft: number;
   round: number;
   volcanoes: number;
@@ -116,6 +118,8 @@ export function createRoom(code: string, hostId: string, hostName: string): Game
     tiles: [],
     explorers: [],
     currentPlayerId: null,
+    turnPhase: "action",
+    creatureRoll: null,
     actionsLeft: 3,
     round: 1,
     volcanoes: 0,
@@ -198,6 +202,8 @@ export function startGame(room: GameRoom) {
 
   room.phase = "playing";
   room.currentPlayerId = room.players[0].id;
+  room.turnPhase = "action";
+  room.creatureRoll = null;
   room.actionsLeft = 3;
   room.round = 1;
   room.log.push("岛屿开始震动，远征正式开始");
@@ -207,6 +213,7 @@ export function startGame(room: GameRoom) {
 export function moveExplorer(room: GameRoom, playerId: string, explorerId: string, targetTileId: string) {
   if (room.phase !== "playing") throw new Error("当前不在游戏中");
   if (room.currentPlayerId !== playerId) throw new Error("还没轮到你");
+  if (room.turnPhase !== "action") throw new Error("当前不是行动阶段");
   if (room.actionsLeft <= 0) throw new Error("本回合行动点已经用完");
 
   const explorer = room.explorers.find((candidate) => candidate.id === explorerId);
@@ -238,25 +245,34 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
 
 export function endTurn(room: GameRoom) {
   if (room.phase !== "playing" || !room.currentPlayerId) return;
-  sinkTile(room);
-  if (checkFinished(room)) return;
+  if (room.turnPhase !== "action") throw new Error("当前不是行动阶段");
+  room.turnPhase = "rising";
+  room.actionsLeft = 0;
+  room.log.push("行动结束，请选择最低地势的岛屿格");
+  bump(room);
+}
 
+function advanceTurn(room: GameRoom) {
   const currentIndex = room.players.findIndex((player) => player.id === room.currentPlayerId);
   const nextIndex = (currentIndex + 1) % room.players.length;
   if (nextIndex === 0) room.round += 1;
   room.currentPlayerId = room.players[nextIndex].id;
+  room.turnPhase = "action";
+  room.creatureRoll = null;
   room.actionsLeft = 3;
   room.log.push(`轮到 ${room.players[nextIndex].name}`);
   bump(room);
 }
 
-function sinkTile(room: GameRoom) {
+export function sinkChosenTile(room: GameRoom, playerId: string, tileId: string) {
+  if (room.phase !== "playing" || room.currentPlayerId !== playerId) throw new Error("还没轮到你");
+  if (room.turnPhase !== "rising") throw new Error("当前不是水位上涨阶段");
   const activeIsland = room.tiles.filter((tile) => tile.active && !tile.isRescue);
-  if (activeIsland.length === 0) return;
+  if (activeIsland.length === 0) throw new Error("已经没有可翻开的岛屿格");
   const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
   const lowest = Math.min(...activeIsland.map((tile) => terrainRank[tile.terrain]));
-  const candidates = activeIsland.filter((tile) => terrainRank[tile.terrain] === lowest);
-  const tile = candidates[Math.floor(Math.random() * candidates.length)];
+  const tile = activeIsland.find((candidate) => candidate.id === tileId);
+  if (!tile || terrainRank[tile.terrain] !== lowest) throw new Error("必须选择当前最低地势的岛屿格");
   tile.active = false;
 
   const stranded = room.explorers.filter((explorer) => explorer.tileId === tile.id && !explorer.rescued);
@@ -276,6 +292,31 @@ function sinkTile(room: GameRoom) {
     room.volcanoes += 1;
     room.log.push(`火山爆发（${room.volcanoes}/${room.maxVolcanoes}）`);
   }
+  bump(room);
+  if (checkFinished(room)) return;
+  room.turnPhase = "creature";
+  room.log.push("水位上涨结算完成，请掷生物骰");
+  bump(room);
+}
+
+export function rollCreatureDie(room: GameRoom, playerId: string) {
+  if (room.phase !== "playing" || room.currentPlayerId !== playerId) throw new Error("还没轮到你");
+  if (room.turnPhase !== "creature") throw new Error("当前不是生物阶段");
+  const faces: PublicRoomState["creatureRoll"][] = [
+    "sea-serpent",
+    "sea-serpent",
+    "shark",
+    "shark",
+    "kaiju",
+    "kaiju"
+  ];
+  const result = faces[Math.floor(Math.random() * faces.length)]!;
+  room.creatureRoll = result;
+  const label = result === "sea-serpent" ? "海蛇" : result === "shark" ? "鲨鱼" : "巨兽";
+  room.log.push(`生物骰掷出了${label}`);
+  bump(room);
+  advanceTurn(room);
+  return result;
 }
 
 export function runAITurn(room: GameRoom) {
@@ -314,6 +355,12 @@ export function runAITurn(room: GameRoom) {
     if (room.phase !== "playing") return;
   }
   endTurn(room);
+  const activeIsland = room.tiles.filter((tile) => tile.active && !tile.isRescue);
+  const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
+  const lowest = Math.min(...activeIsland.map((tile) => terrainRank[tile.terrain]));
+  const sinkTarget = activeIsland.filter((tile) => terrainRank[tile.terrain] === lowest)[0];
+  if (sinkTarget) sinkChosenTile(room, player.id, sinkTarget.id);
+  if (room.phase === "playing") rollCreatureDie(room, player.id);
 }
 
 function checkFinished(room: GameRoom) {
@@ -342,6 +389,8 @@ export function publicState(room: GameRoom, viewerId?: string): PublicRoomState 
       value: explorer.rescued ? explorer.value : undefined
     })),
     currentPlayerId: room.currentPlayerId,
+    turnPhase: room.turnPhase,
+    creatureRoll: room.creatureRoll,
     actionsLeft: room.actionsLeft,
     round: room.round,
     volcanoes: room.volcanoes,

@@ -2,6 +2,8 @@ export const PLAYER_COLORS = ["coral", "teal", "gold", "violet", "sky"] as const
 export type PlayerColor = (typeof PLAYER_COLORS)[number];
 export type Terrain = "beach" | "forest" | "mountain";
 export type RoomPhase = "lobby" | "playing" | "finished";
+export type TurnPhase = "action" | "rising" | "creature";
+export type CreatureRoll = "sea-serpent" | "shark" | "kaiju";
 export type Role = "player" | "spectator";
 
 export interface HexCoord {
@@ -54,6 +56,8 @@ export interface PublicRoomState {
   tiles: TileView[];
   explorers: ExplorerView[];
   currentPlayerId: string | null;
+  turnPhase: TurnPhase;
+  creatureRoll: CreatureRoll | null;
   actionsLeft: number;
   round: number;
   volcanoes: number;
@@ -97,6 +101,8 @@ export interface ClientToServerEvents {
     ack: (result: Ack) => void
   ) => void;
   endTurn: (ack: (result: Ack) => void) => void;
+  sinkTile: (tileId: string, ack: (result: Ack) => void) => void;
+  rollCreatureDie: (ack: (result: Ack<CreatureRoll>) => void) => void;
   leaveRoom: (ack: (result: Ack) => void) => void;
 }
 
