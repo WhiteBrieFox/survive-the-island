@@ -134,10 +134,10 @@ export function addSpectator(room: GameRoom, id: string, name: string) {
 
 function rescueCoords() {
   return [
-    { q: -3, r: -4 },
-    { q: 7, r: -4 },
-    { q: -7, r: 4 },
-    { q: 3, r: 4 }
+    { q: -2, r: -5 },
+    { q: 7, r: -5 },
+    { q: -7, r: 5 },
+    { q: 2, r: 5 }
   ];
 }
 
