@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { areAdjacent } from "../shared/hex";
+import { areAdjacent, hexDistance } from "../shared/hex";
 import {
   addPlayer, createRoom, endTurn, finishCreatureMovement, moveCreature, moveExplorer, placeExplorer, placeRaft,
   publicState, resolveBoarding, resolveDisplacement, respondRepellent, rollCreatureDie, runAITurn, sinkChosenTile, startGame
@@ -89,6 +89,40 @@ describe("complete game core", () => {
     expect(room.explorers).toHaveLength(40);
     expect(room.rafts).toHaveLength(8);
     expect(room.creatures.filter((creature) => creature.type === "sea-serpent")).toHaveLength(5);
+  });
+
+  it("places rescue islands across open water with a guarding sea serpent", () => {
+    const room = startedRoom();
+    const island = room.tiles.filter((tile) => !tile.isRescue);
+    const rescues = room.tiles.filter((tile) => tile.isRescue);
+    for (const rescue of rescues) {
+      expect(Math.min(...island.map((tile) => hexDistance(tile, rescue)))).toBeGreaterThan(1);
+      expect(room.creatures.some((creature) => {
+        const space = room.waterSpaces.find((water) => water.id === creature.locationId);
+        return creature.type === "sea-serpent" && space && areAdjacent(space, rescue);
+      })).toBe(true);
+    }
+  });
+
+  it("requires a raft to enter a rescue island", () => {
+    const room = startedRoom();
+    const rescue = room.tiles.find((tile) => tile.isRescue)!;
+    const source = room.waterSpaces.find((space) =>
+      areAdjacent(space, rescue) && !room.rafts.some((raft) => raft.locationId === space.id)
+    )!;
+    const explorer = room.explorers.find((candidate) => candidate.ownerId === "host")!;
+    explorer.locationId = explorer.tileId = source.id;
+    explorer.raftId = null;
+    explorer.swimming = true;
+
+    expect(() => moveExplorer(room, "host", explorer.id, rescue.id)).toThrow(/必须乘木筏/);
+
+    const raft = room.rafts[0];
+    raft.locationId = source.id;
+    explorer.raftId = raft.id;
+    explorer.swimming = false;
+    moveExplorer(room, "host", explorer.id, rescue.id);
+    expect(explorer.rescued).toBe(true);
   });
 
   it("shows treasure only during placement and after rescue", () => {

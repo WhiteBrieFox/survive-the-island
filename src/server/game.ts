@@ -132,23 +132,13 @@ export function addSpectator(room: GameRoom, id: string, name: string) {
   bump(room);
 }
 
-function rescueCoords(island: TileView[]) {
-  const occupied = new Set(island.map(hexKey));
-  const candidates = new Map<string, { q: number; r: number }>();
-  for (const tile of island) for (const direction of DIRS) {
-    const coord = { q: tile.q + direction.q, r: tile.r + direction.r };
-    if (!occupied.has(hexKey(coord))) candidates.set(hexKey(coord), coord);
-  }
-  const angles = [-2.35, -0.78, 0.78, 2.35];
-  const pool = [...candidates.values()];
-  return angles.map((angle) => {
-    const selected = pool.map((coord) => ({
-      coord,
-      score: Math.abs(Math.atan2(Math.sin(Math.atan2(coord.r, coord.q) - angle), Math.cos(Math.atan2(coord.r, coord.q) - angle))) - hexDistance({ q: 0, r: 0 }, coord) * 0.03
-    })).sort((a, b) => a.score - b.score)[0].coord;
-    pool.splice(pool.findIndex((coord) => hexKey(coord) === hexKey(selected)), 1);
-    return selected;
-  });
+function rescueCoords() {
+  return [
+    { q: -3, r: -4 },
+    { q: 7, r: -4 },
+    { q: -7, r: 4 },
+    { q: 3, r: 4 }
+  ];
 }
 
 function waterSpaces(tiles: TileView[]) {
@@ -175,7 +165,7 @@ export function startGame(room: GameRoom) {
     const terrain = kinds[index];
     return { ...coord, id: `tile-${index}`, terrain, active: true, sinking: false, blocked: false, effect: pools[terrain].pop()! };
   });
-  const rescues: GameTile[] = rescueCoords(island).map((coord, index) => ({
+  const rescues: GameTile[] = rescueCoords().map((coord, index) => ({
     ...coord, id: `rescue-${index}`, terrain: "beach", active: true, sinking: false, blocked: false, isRescue: true, effect: "raft"
   }));
   room.tiles = [...island, ...rescues];
@@ -191,9 +181,21 @@ export function startGame(room: GameRoom) {
       swimming: false, swamThisTurn: false, rescued: false, lost: false, value
     }));
   });
-  const outer = [...room.waterSpaces].sort((a, b) => hexDistance({ q: 0, r: 0 }, b) - hexDistance({ q: 0, r: 0 }, a));
-  room.creatures = [0, 1, 2, 3, 4].map((index) => ({
-    id: `sea-serpent-${index}`, type: "sea-serpent", locationId: outer[Math.floor(index * outer.length / 5)].id
+  const guardedSpaces = rescues.map((rescue) =>
+    room.waterSpaces
+      .filter((space) => areAdjacent(space, rescue))
+      .sort((a, b) => hexDistance({ q: 0, r: 0 }, a) - hexDistance({ q: 0, r: 0 }, b))[0]
+  );
+  const guardedIds = new Set(guardedSpaces.map((space) => space.id));
+  const fifthSerpentSpace = [...room.waterSpaces]
+    .filter((space) => !guardedIds.has(space.id))
+    .sort((a, b) => {
+      const distanceA = Math.min(...guardedSpaces.map((guard) => hexDistance(a, guard)));
+      const distanceB = Math.min(...guardedSpaces.map((guard) => hexDistance(b, guard)));
+      return distanceB - distanceA;
+    })[0];
+  room.creatures = [...guardedSpaces, fifthSerpentSpace].map((space, index) => ({
+    id: `sea-serpent-${index}`, type: "sea-serpent", locationId: space.id
   }));
   room.rafts = [];
   room.phase = "playing";
@@ -290,6 +292,7 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
   if (!from || !to || !areAdjacent(from, to)) throw new Error("只能移动到相邻格");
   const targetTile = room.tiles.find((tile) => tile.id === targetId);
   if (targetTile?.blocked || room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) throw new Error("该格被巨兽或火山阻挡");
+  if (targetTile?.isRescue && !explorer.raftId) throw new Error("必须乘木筏抵达救援岛");
   const destinationRaft = raftAt(room, targetId);
   if (destinationRaft && occupants(room, destinationRaft.id).length >= 3) throw new Error("木筏已经满员");
   const sourceStable = Boolean(explorer.raftId || room.tiles.some((tile) => tile.id === explorer.locationId && tile.active));
@@ -655,6 +658,7 @@ function displacementTargets(room: GameRoom, displacement: Displacement) {
   return adjacentIds(room, entity.locationId).filter((id) => {
     const tile = room.tiles.find((item) => item.id === id);
     if (tile?.blocked) return false;
+    if (tile?.isRescue) return false;
     if (room.creatures.some((item) => item.type === "kaiju" && item.locationId === id)) return false;
     if (displacement.entityKind === "creature") {
       const moved = entity as CreatureView;
@@ -796,7 +800,8 @@ export function useAbility(room: GameRoom, playerId: string, ability: AbilityTyp
     const explorer = room.explorers.find((item) => item.id === actorId && item.ownerId === playerId && item.swimming);
     const from = explorer?.locationId ? coord(room, explorer.locationId) : undefined;
     const to = targetId ? coord(room, targetId) : undefined;
-    if (!explorer || !from || !to || !targetId || hexDistance(from, to) > 2) throw new Error("海豚目标不合法");
+    if (!explorer || !from || !to || !targetId || hexDistance(from, to) > 2 ||
+      room.tiles.some((tile) => tile.id === targetId && tile.isRescue)) throw new Error("海豚不能直接送达救援岛");
     explorer.locationId = explorer.tileId = targetId;
     const raft = raftAt(room, targetId);
     explorer.raftId = raft && occupants(room, raft.id).length < 3 ? raft.id : null;
@@ -851,11 +856,45 @@ export function runAITurn(room: GameRoom) {
     if (target) placeRaft(room, player.id, target.id);
   } else if (room.turnPhase === "action") {
     while (room.actionsLeft > 0) {
-      const options = room.explorers.filter((item) => item.ownerId === player.id && item.locationId && !item.lost && !item.rescued)
+      const rescueMove = room.explorers
+        .filter((item) => item.ownerId === player.id && item.locationId && item.raftId && !item.lost && !item.rescued)
+        .flatMap((explorer) => room.tiles
+          .filter((tile) => tile.isRescue && areAdjacent(coord(room, explorer.locationId!)!, tile))
+          .map((tile) => ({ explorer, targetId: tile.id })))
+        .sort((a, b) => b.explorer.value - a.explorer.value)[0];
+      if (rescueMove) {
+        moveExplorer(room, player.id, rescueMove.explorer.id, rescueMove.targetId);
+        if (room.phase !== "playing") break;
+        continue;
+      }
+
+      const raftMove = room.rafts
+        .filter((raft) => controlsRaft(room, player.id, raft) && occupants(room, raft.id).some((item) => item.ownerId === player.id))
+        .flatMap((raft) => {
+          const from = coord(room, raft.locationId);
+          if (!from) return [];
+          return [...room.waterSpaces, ...room.tiles.filter((tile) => !tile.active && !tile.blocked)]
+            .filter((target) => areAdjacent(from, target) && !raftAt(room, target.id) &&
+              !room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === target.id))
+            .map((target) => ({
+              raft,
+              targetId: target.id,
+              distance: Math.min(...room.tiles.filter((tile) => tile.isRescue).map((rescue) => hexDistance(target, rescue)))
+            }));
+        })
+        .sort((a, b) => a.distance - b.distance)[0];
+      if (raftMove) {
+        moveRaft(room, player.id, raftMove.raft.id, raftMove.targetId);
+        if (room.phase !== "playing") break;
+        continue;
+      }
+
+      const options = room.explorers.filter((item) => item.ownerId === player.id && item.locationId && !item.raftId && !item.lost && !item.rescued)
         .flatMap((explorer) => adjacentIds(room, explorer.locationId!).map((targetId) => {
           const target = coord(room, targetId)!;
           const distance = Math.min(...room.tiles.filter((tile) => tile.isRescue).map((rescue) => hexDistance(target, rescue)));
-          return { explorer, targetId, score: room.tiles.find((tile) => tile.id === targetId)?.isRescue ? 100 + explorer.value : 20 - distance };
+          const boardsRaft = Boolean(raftAt(room, targetId));
+          return { explorer, targetId, score: boardsRaft ? 80 + explorer.value : 20 - distance };
         })).sort((a, b) => b.score - a.score);
       let moved = false;
       for (const option of options) try { moveExplorer(room, player.id, option.explorer.id, option.targetId); moved = true; break; } catch { /* next */ }
