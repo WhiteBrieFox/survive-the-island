@@ -306,14 +306,22 @@ function Explorer({
       ? [placement.x, placement.z]
       : [0, 0];
   const terrainHeight = "terrain" in tile && tile.active
-    ? tile.terrain === "mountain" ? 0.62 : 0.42
-    : -0.04;
+    ? tile.terrain === "mountain" ? 0.36 : 0.2
+    : -0.39;
   const facing = explorer.raftId || explorer.swimming
     ? 0
     : Math.atan2(-offsetX, -offsetZ);
+  const modelRotation: [number, number, number] = explorer.swimming
+    ? [-1.18, facing, 0]
+    : [0, facing, 0];
+  const modelScale = explorer.swimming ? 0.27 : 0.3;
 
   return (
-    <Float speed={selected ? 4 : 1.4} rotationIntensity={0} floatIntensity={selected ? 0.2 : 0.05}>
+    <Float
+      speed={selected ? 4 : 1.4}
+      rotationIntensity={0}
+      floatIntensity={selected ? 0.16 : explorer.swimming ? 0.06 : explorer.raftId ? 0.03 : 0}
+    >
       <group
         position={[x + offsetX, explorer.raftId ? 0.23 : terrainHeight, z + offsetZ]}
         onClick={(event) => {
@@ -322,7 +330,19 @@ function Explorer({
         }}
         scale={selected ? 1.18 : 1}
       >
-        <AssetModel name="explorer" color={color} rotation={[0, facing, 0]} scale={0.3} />
+        <AssetModel name="explorer" color={color} rotation={modelRotation} scale={modelScale} />
+        {explorer.swimming && (
+          <group position-y={0.02}>
+            <mesh rotation-x={-Math.PI / 2}>
+              <ringGeometry args={[0.24, 0.29, 32]} />
+              <meshBasicMaterial color="#c9fbf4" transparent opacity={0.8} depthWrite={false} />
+            </mesh>
+            <mesh rotation-x={-Math.PI / 2}>
+              <ringGeometry args={[0.36, 0.39, 32]} />
+              <meshBasicMaterial color="#8de6df" transparent opacity={0.48} depthWrite={false} />
+            </mesh>
+          </group>
+        )}
         {!explorer.raftId && !explorer.swimming && (
           <mesh rotation-x={-Math.PI / 2} position-y={0.015}>
             <circleGeometry args={[0.22, 24]} />
@@ -352,6 +372,23 @@ function WaterTarget({ space, highlighted, onClick }: { space: WaterSpaceView; h
       <ringGeometry args={[0.58, 0.82, 6]} />
       <meshBasicMaterial color="#fff1a8" transparent opacity={0.9} />
     </mesh>
+  );
+}
+
+function SunkenTileTarget({ tile, highlighted, onClick }: { tile: TileView; highlighted: boolean; onClick: () => void }) {
+  if (!highlighted || tile.active || tile.blocked || tile.isRescue) return null;
+  const { x, z } = hexToWorld(tile);
+  return (
+    <group position={[x, -0.4, z]} onClick={(event) => { event.stopPropagation(); onClick(); }}>
+      <mesh rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[0.84, 32]} />
+        <meshBasicMaterial color="#fff1a8" transparent opacity={0.08} depthWrite={false} />
+      </mesh>
+      <mesh rotation-x={-Math.PI / 2} position-y={0.006}>
+        <ringGeometry args={[0.62, 0.84, 6]} />
+        <meshBasicMaterial color="#fff1a8" transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 
@@ -688,6 +725,14 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
           ))}
           {room.waterSpaces.map((space) => (
             <WaterTarget key={space.id} space={space} highlighted={moveTargets.has(space.id)} onClick={() => handleTarget(space.id)} />
+          ))}
+          {room.tiles.map((tile) => (
+            <SunkenTileTarget
+              key={`sunken-target-${tile.id}`}
+              tile={tile}
+              highlighted={moveTargets.has(tile.id)}
+              onClick={() => handleTarget(tile.id)}
+            />
           ))}
           {room.rafts.map((raft) => {
             const space = allSpaces.find((item) => item.id === raft.locationId);

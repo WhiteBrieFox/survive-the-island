@@ -335,6 +335,35 @@ describe("complete game core", () => {
     expect(room.currentPlayerId).toBe("guest");
   });
 
+  it("lets a shark enter a sunken tile and eat its swimmer", () => {
+    const room = startedRoom();
+    const target = room.tiles.find((tile) => {
+      if (!tile.active || tile.isRescue || tile.terrain !== "beach") return false;
+      return room.explorers.some((explorer) => explorer.locationId === tile.id) &&
+        room.waterSpaces.some((space) => areAdjacent(space, tile));
+    })!;
+    const source = room.waterSpaces.find((space) => areAdjacent(space, target))!;
+    const swimmer = room.explorers.find((explorer) => explorer.locationId === target.id)!;
+    target.effect = "paddles";
+
+    endTurn(room);
+    sinkChosenTile(room, "host", target.id);
+    expect(swimmer.swimming).toBe(true);
+
+    room.creatures.push({ id: "sunken-tile-shark", type: "shark", locationId: source.id });
+    room.turnPhase = "creature-move";
+    room.creatureRoll = "shark";
+    room.creatureMovesRemaining = 2;
+    room.creatureMoved = false;
+    room.resumePhase = "creature";
+    room.pendingChoice = { type: "move-creature", creatureType: "shark", stepsRemaining: 2, canFinish: false };
+
+    moveCreature(room, "host", "sunken-tile-shark", target.id);
+
+    expect(swimmer.lost).toBe(true);
+    expect(room.creatures.find((creature) => creature.id === "sunken-tile-shark")?.locationId).toBe(target.id);
+  });
+
   it("allows actively skipping a creature that still has a legal move", () => {
     const room = startedRoom();
     const from = room.waterSpaces.find((space) =>
