@@ -8,6 +8,13 @@
       "model": "Gpt Image 2",
       "promptFile": "../../../docs/generation-prompts.md",
       "status": "approved"
+    },
+    {
+      "file": "victory-results-key-art.png",
+      "purpose": "Victory results celebration hero",
+      "model": "Gpt Image 2 via Mira",
+      "promptFile": "../../../docs/generation-prompts.md",
+      "status": "approved"
     }
   ]
 }

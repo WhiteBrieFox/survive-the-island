@@ -53,7 +53,7 @@ export function ResultPanel({ room, clientId, onReturnToLobby, onOpenLog }: Resu
     <div className="result-backdrop">
       <section className="result-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
         <header className="result-hero">
-          <img src="/assets/generated/main-menu-key-art.png" alt="" />
+          <img src="/assets/generated/victory-results-key-art.png" alt="" />
           <div className="result-hero-shade" />
           <div className="result-title-block">
             <span className="result-kicker"><Flag size={15} />远征完成 · 第 {room.round} 轮</span>
