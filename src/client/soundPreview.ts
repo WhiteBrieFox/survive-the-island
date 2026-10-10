@@ -1,4 +1,10 @@
-import { soundDefinitions, playSound, type SoundCategory, type SoundId } from "./soundDesign";
+import {
+  soundDefinitions,
+  playSound,
+  stopSoundPreview,
+  type SoundCategory,
+  type SoundId
+} from "./sampleSoundDesign";
 import "./soundPreview.css";
 
 const categoryNames: Record<SoundCategory, string> = {
@@ -19,7 +25,7 @@ root.innerHTML = `
       <div>
         <span>BEHAVIOR SOUND REVIEW</span>
         <h1>沉岛远征 · 行为音效预览</h1>
-        <p>本页是候选声音设计，确认后再映射到正式游戏事件。</p>
+        <p>真实录音素材候选，已按游戏行为分层编排，确认后再接入正式游戏。</p>
       </div>
       <label class="master-volume">
         <span>试听音量</span>
@@ -38,7 +44,7 @@ root.innerHTML = `
     <section class="sound-list" id="sound-list"></section>
     <footer class="sound-footer">
       <strong>试听说明</strong>
-      <span>所有声音均由浏览器实时合成，不复用当前不匹配的通用攻击音。正式接入时会按服务器事件精确触发。</span>
+      <span>候选素材来自 Mixkit 免费音效库与 Kenney CC0 音效包。试听会自动停止上一项，避免声音相互叠加。</span>
     </footer>
   </main>
 `;
@@ -57,6 +63,7 @@ function render() {
       <div class="sound-copy">
         <strong>${sound.label}</strong>
         <span>${sound.description}</span>
+        <em>${sound.source}</em>
       </div>
       <small>${sound.duration}</small>
       <button type="button" data-sound="${sound.id}" title="试听${sound.label}">
@@ -83,6 +90,7 @@ function render() {
 
 document.querySelectorAll<HTMLButtonElement>("[data-category]").forEach((button) => {
   button.addEventListener("click", () => {
+    stopSoundPreview();
     activeCategory = button.dataset.category as SoundCategory;
     activeSound = null;
     document.querySelectorAll<HTMLButtonElement>("[data-category]").forEach((item) => {

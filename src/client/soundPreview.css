@@ -171,6 +171,17 @@ input {
   line-height: 1.45;
 }
 
+.sound-copy em {
+  width: fit-content;
+  padding: 2px 6px;
+  color: #326b65;
+  background: #e2eee7;
+  border-radius: 3px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .sound-row small {
   color: #81928f;
   font-size: 11px;
