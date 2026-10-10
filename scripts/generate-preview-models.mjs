@@ -54,11 +54,28 @@ const materials = {
   leaf: material("LeafBright", "#4d982f", 0.78),
   leafDark: material("LeafDark", "#2f7535", 0.82),
   leafLight: material("LeafHighlight", "#79b83d", 0.74),
-  coconut: material("Coconut", "#5e3b22", 0.92)
+  coconut: material("Coconut", "#5e3b22", 0.92),
+  kaiju: material("KaijuCobalt", "#315f9f", 0.62),
+  kaijuDark: material("KaijuDeepBlue", "#173d70", 0.68),
+  kaijuBelly: material("KaijuBelly", "#8db8ad", 0.78),
+  horn: material("CoralIvory", "#e3dcc4", 0.76),
+  dragon: material("DragonCrimson", "#b83a2d", 0.58),
+  dragonDark: material("DragonDark", "#6e2027", 0.68),
+  dragonBelly: material("DragonGoldBelly", "#e39b42", 0.66),
+  dragonMembrane: material("DragonWingMembrane", "#e55d35", 0.64),
+  ember: material("Ember", "#ffb238", 0.3),
+  serpent: material("SerpentCrimson", "#c74839", 0.56),
+  serpentDark: material("SerpentDark", "#7f2431", 0.66),
+  serpentBelly: material("SerpentIvory", "#e8cf9d", 0.74),
+  wood: material("RaftWood", "#9b5d2d", 0.9),
+  woodLight: material("RaftWoodLight", "#c68a45", 0.86),
+  ropeFiber: material("RopeFiber", "#d2b16d", 0.96),
+  sail: material("RolledSail", "#e4d4a5", 0.88)
 };
 materials.leaf.side = THREE.DoubleSide;
 materials.leafDark.side = THREE.DoubleSide;
 materials.leafLight.side = THREE.DoubleSide;
+materials.dragonMembrane.side = THREE.DoubleSide;
 
 function mesh(geometry, mat, name, position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1]) {
   const value = new THREE.Mesh(geometry, mat);
@@ -284,6 +301,233 @@ function createShark() {
   return { root, animations: [swim] };
 }
 
+function createKaiju() {
+  const root = new THREE.Group();
+  root.name = "kaiju";
+  const body = new THREE.Group();
+  body.name = "KaijuBody";
+  root.add(body);
+
+  body.add(mesh(new THREE.SphereGeometry(0.56, 22, 16), materials.kaiju, "Torso", [0, 1.18, 0], [0, 0, 0], [0.86, 1.28, 0.7]));
+  body.add(mesh(new THREE.SphereGeometry(0.39, 20, 14), materials.kaiju, "Head", [0, 1.96, 0.04], [0, 0, 0], [0.92, 0.82, 0.88]));
+  body.add(mesh(new THREE.SphereGeometry(0.3, 18, 12), materials.kaijuBelly, "Belly", [0, 1.18, 0.39], [0, 0, 0], [0.92, 1.34, 0.34]));
+  body.add(mesh(new THREE.SphereGeometry(0.28, 18, 12), materials.kaijuBelly, "Muzzle", [0, 1.84, 0.34], [0, 0, 0], [0.92, 0.48, 0.7]));
+  addEyes(body, 2.05, 0.34, 0.14, 0.95);
+
+  for (const side of [-1, 1]) {
+    body.add(mesh(new THREE.ConeGeometry(0.1, 0.38, 8), materials.horn, `BrowHorn_${side}`, [side * 0.23, 2.28, 0.02], [0, 0, side * -0.52]));
+    body.add(capsule(0.15, 0.54, materials.kaiju, `UpperArm_${side}`, [side * 0.54, 1.42, 0.05], [0.1, 0, side * -0.35], [1, 1, 1.05]));
+    body.add(capsule(0.14, 0.42, materials.kaijuDark, `Forearm_${side}`, [side * 0.68, 1.03, 0.22], [-0.5, 0, side * -0.12], [1.12, 1, 1.18]));
+    body.add(mesh(new THREE.SphereGeometry(0.18, 12, 9), materials.kaijuDark, `ClawHand_${side}`, [side * 0.73, 0.75, 0.36], [0, 0, 0], [1.12, 0.72, 1.32]));
+    body.add(capsule(0.2, 0.48, materials.kaiju, `Thigh_${side}`, [side * 0.27, 0.58, 0], [0, 0, side * -0.08], [1.08, 1, 1]));
+    body.add(mesh(new THREE.SphereGeometry(0.22, 14, 10), materials.kaijuDark, `WebbedFoot_${side}`, [side * 0.3, 0.16, 0.18], [0, 0, 0], [1.08, 0.58, 1.55]));
+  }
+
+  for (let index = 0; index < 5; index += 1) {
+    body.add(mesh(
+      finGeometry(0.36 - index * 0.035, 0.28 - index * 0.02, 0.055),
+      materials.kaijuDark,
+      `DorsalPlate_${index}`,
+      [0, 1.66 - index * 0.28, -0.5],
+      [0, Math.PI / 2, 0]
+    ));
+  }
+
+  const tail = new THREE.Group();
+  tail.name = "KaijuTail";
+  tail.position.set(0, 0.72, -0.42);
+  tail.add(curvedTrunk("KaijuTailMesh", [[0, 0, 0], [0.08, -0.08, -0.5], [0.22, -0.22, -0.94], [0.5, -0.35, -1.24]], 0.13, materials.kaijuDark));
+  body.add(tail);
+  mergeMeshesByMaterial(tail, "KaijuTail");
+  mergeMeshesByMaterial(body, "Kaiju", [tail]);
+
+  const breathe = new THREE.AnimationClip("HeavyIdle", 2.8, [
+    new THREE.VectorKeyframeTrack("KaijuBody.scale", [0, 1.4, 2.8], [1, 1, 1, 1.018, 1.032, 1.018, 1, 1, 1]),
+    new THREE.QuaternionKeyframeTrack(
+      "KaijuTail.quaternion",
+      [0, 0.7, 1.4, 2.1, 2.8],
+      [0, -0.12, 0, 0.993, 0, 0.12, 0, 0.993, 0, -0.12, 0, 0.993, 0, 0.12, 0, 0.993, 0, -0.12, 0, 0.993]
+    )
+  ]);
+  root.userData.assetType = "kaiju";
+  root.userData.originalDesign = true;
+  return { root, animations: [breathe] };
+}
+
+function dragonWingGeometry(span = 1.1, height = 0.72) {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(span * 0.42, height);
+  shape.lineTo(span, height * 0.52);
+  shape.lineTo(span * 0.72, height * 0.18);
+  shape.lineTo(span * 0.48, height * 0.34);
+  shape.lineTo(span * 0.25, height * 0.08);
+  shape.lineTo(0, 0);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.045,
+    bevelEnabled: true,
+    bevelSegments: 1,
+    bevelSize: 0.018,
+    bevelThickness: 0.018
+  });
+  geometry.center();
+  return geometry;
+}
+
+function createFireDragon() {
+  const root = new THREE.Group();
+  root.name = "fire_dragon";
+  const body = new THREE.Group();
+  body.name = "FireDragonBody";
+  root.add(body);
+
+  body.add(mesh(new THREE.SphereGeometry(0.46, 22, 16), materials.dragon, "DragonTorso", [0, 0.92, 0], [0, 0, 0], [0.76, 1.18, 1.05]));
+  body.add(mesh(new THREE.SphereGeometry(0.34, 20, 14), materials.dragon, "DragonHead", [0, 1.52, 0.38], [-0.12, 0, 0], [0.95, 0.75, 1.15]));
+  body.add(mesh(new THREE.SphereGeometry(0.27, 18, 12), materials.dragonBelly, "DragonMuzzle", [0, 1.39, 0.67], [0, 0, 0], [0.95, 0.48, 0.75]));
+  body.add(mesh(new THREE.SphereGeometry(0.24, 18, 12), materials.dragonBelly, "DragonChest", [0, 0.93, 0.36], [0, 0, 0], [0.92, 1.48, 0.34]));
+  addEyes(body, 1.62, 0.65, 0.13, 0.88);
+
+  for (const side of [-1, 1]) {
+    body.add(mesh(new THREE.ConeGeometry(0.075, 0.36, 8), materials.horn, `DragonHorn_${side}`, [side * 0.18, 1.87, 0.2], [-0.4, 0, side * -0.34]));
+    body.add(capsule(0.11, 0.4, materials.dragon, `DragonLeg_${side}`, [side * 0.28, 0.47, 0.12], [0.18, 0, side * -0.12]));
+    body.add(mesh(new THREE.SphereGeometry(0.15, 12, 8), materials.dragonDark, `DragonFoot_${side}`, [side * 0.31, 0.16, 0.3], [0, 0, 0], [1.18, 0.55, 1.42]));
+    body.add(capsule(0.08, 0.3, materials.dragon, `DragonArm_${side}`, [side * 0.32, 1.02, 0.35], [-0.55, 0, side * -0.16]));
+  }
+
+  const leftWing = new THREE.Group();
+  leftWing.name = "DragonWingLeft";
+  leftWing.position.set(-0.3, 1.28, -0.05);
+  leftWing.add(mesh(dragonWingGeometry(), materials.dragonMembrane, "LeftWingMembrane", [-0.52, 0.24, -0.08], [0.05, -0.22, -0.14]));
+  leftWing.add(capsule(0.045, 0.95, materials.dragonDark, "LeftWingBone", [-0.38, 0.38, -0.08], [0, 0, 0.82]));
+  body.add(leftWing);
+
+  const rightWing = new THREE.Group();
+  rightWing.name = "DragonWingRight";
+  rightWing.position.set(0.3, 1.28, -0.05);
+  rightWing.add(mesh(dragonWingGeometry(), materials.dragonMembrane, "RightWingMembrane", [0.52, 0.24, -0.08], [0.05, Math.PI + 0.22, 0.14]));
+  rightWing.add(capsule(0.045, 0.95, materials.dragonDark, "RightWingBone", [0.38, 0.38, -0.08], [0, 0, -0.82]));
+  body.add(rightWing);
+
+  const tail = new THREE.Group();
+  tail.name = "DragonTail";
+  tail.position.set(0, 0.72, -0.4);
+  tail.add(curvedTrunk("DragonTailMesh", [[0, 0, 0], [-0.1, -0.02, -0.52], [-0.34, -0.18, -0.93], [-0.62, -0.12, -1.18]], 0.1, materials.dragonDark));
+  tail.add(mesh(finGeometry(0.42, 0.3, 0.045), materials.ember, "TailFlame", [-0.63, -0.12, -1.2], [0, 0, -0.35]));
+  body.add(tail);
+
+  for (let index = 0; index < 4; index += 1) {
+    body.add(mesh(finGeometry(0.28, 0.2, 0.04), materials.dragonDark, `DragonSpine_${index}`, [0, 1.18 - index * 0.25, -0.42], [0, Math.PI / 2, 0]));
+  }
+
+  mergeMeshesByMaterial(leftWing, "DragonWingLeft");
+  mergeMeshesByMaterial(rightWing, "DragonWingRight");
+  mergeMeshesByMaterial(tail, "DragonTail");
+  mergeMeshesByMaterial(body, "FireDragon", [leftWing, rightWing, tail]);
+
+  const idle = new THREE.AnimationClip("GuardIdle", 3.2, [
+    new THREE.VectorKeyframeTrack("FireDragonBody.scale", [0, 1.6, 3.2], [1, 1, 1, 1.018, 1.03, 1.018, 1, 1, 1]),
+    new THREE.QuaternionKeyframeTrack(
+      "DragonWingLeft.quaternion",
+      [0, 1.6, 3.2],
+      [0, 0, -0.08, 0.997, 0, 0, 0.12, 0.993, 0, 0, -0.08, 0.997]
+    ),
+    new THREE.QuaternionKeyframeTrack(
+      "DragonWingRight.quaternion",
+      [0, 1.6, 3.2],
+      [0, 0, 0.08, 0.997, 0, 0, -0.12, 0.993, 0, 0, 0.08, 0.997]
+    ),
+    new THREE.QuaternionKeyframeTrack(
+      "DragonTail.quaternion",
+      [0, 0.8, 1.6, 2.4, 3.2],
+      [0, -0.1, 0, 0.995, 0, 0.1, 0, 0.995, 0, -0.1, 0, 0.995, 0, 0.1, 0, 0.995, 0, -0.1, 0, 0.995]
+    )
+  ]);
+  root.userData.assetType = "endpoint-guardian";
+  root.userData.originalDesign = true;
+  return { root, animations: [idle] };
+}
+
+function createSeaSerpent() {
+  const root = new THREE.Group();
+  root.name = "sea_serpent";
+  const swimmer = new THREE.Group();
+  swimmer.name = "SeaSerpentSwimmer";
+  root.add(swimmer);
+
+  swimmer.add(curvedTrunk(
+    "SerpentBody",
+    [[0, 0.48, 0.82], [-0.34, 0.1, 0.46], [0.34, 0.02, 0.02], [-0.3, -0.01, -0.5], [0.18, 0.02, -1.08]],
+    0.17,
+    materials.serpent
+  ));
+  swimmer.add(mesh(new THREE.SphereGeometry(0.25, 20, 14), materials.serpent, "SerpentHead", [0, 0.62, 0.98], [-0.12, 0, 0], [0.88, 0.78, 1.08]));
+  swimmer.add(mesh(new THREE.SphereGeometry(0.18, 18, 12), materials.serpentBelly, "SerpentMuzzle", [0, 0.53, 1.18], [0, 0, 0], [0.9, 0.48, 0.72]));
+  addEyes(swimmer, 0.68, 1.18, 0.1, 0.72);
+  for (const side of [-1, 1]) {
+    swimmer.add(mesh(finGeometry(0.38, 0.23, 0.04), materials.serpentDark, `SerpentFin_${side}`, [side * 0.18, 0.16, 0.38], [Math.PI / 2, side * 0.18, side * -0.3]));
+  }
+  for (let index = 0; index < 6; index += 1) {
+    swimmer.add(mesh(
+      finGeometry(0.27 - index * 0.018, 0.22 - index * 0.014, 0.035),
+      index % 2 ? materials.serpentDark : materials.ember,
+      `SerpentCrest_${index}`,
+      [0, 0.74 - index * 0.12, 0.82 - index * 0.31],
+      [0, Math.PI / 2, 0]
+    ));
+  }
+  mergeMeshesByMaterial(swimmer, "SeaSerpent");
+
+  const swim = new THREE.AnimationClip("SerpentSwim", 2.2, [
+    new THREE.QuaternionKeyframeTrack(
+      "SeaSerpentSwimmer.quaternion",
+      [0, 0.55, 1.1, 1.65, 2.2],
+      [0, -0.05, -0.025, 0.998, 0, 0.06, 0.025, 0.998, 0, -0.05, -0.025, 0.998, 0, 0.06, 0.025, 0.998, 0, -0.05, -0.025, 0.998]
+    ),
+    new THREE.VectorKeyframeTrack("SeaSerpentSwimmer.position", [0, 1.1, 2.2], [0, 0, 0, 0, 0.08, 0, 0, 0, 0])
+  ]);
+  root.userData.assetType = "sea-serpent";
+  return { root, animations: [swim] };
+}
+
+function createRaft() {
+  const root = new THREE.Group();
+  root.name = "raft";
+  const raft = new THREE.Group();
+  raft.name = "RaftFloat";
+  root.add(raft);
+
+  for (let index = 0; index < 6; index += 1) {
+    const x = (index - 2.5) * 0.22;
+    raft.add(mesh(new THREE.CylinderGeometry(0.1, 0.115, 1.65, 12), index % 2 ? materials.wood : materials.woodLight, `Log_${index}`, [x, 0.12, 0], [Math.PI / 2, 0, 0]));
+  }
+  for (const z of [-0.5, 0.5]) {
+    raft.add(mesh(roundedBoxGeometry(1.35, 0.09, 0.1, 0.025), materials.woodLight, `CrossBrace_${z}`, [0, 0.23, z]));
+  }
+  for (const x of [-0.42, 0.42]) {
+    for (const z of [-0.5, 0.5]) {
+      raft.add(mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 16), materials.ropeFiber, `RopeLoop_${x}_${z}`, [x, 0.27, z], [Math.PI / 2, 0, 0]));
+    }
+  }
+  raft.add(mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.05, 14), materials.sail, "RolledSail", [0, 0.38, -0.47], [0, 0, Math.PI / 2]));
+  for (const side of [-1, 1]) {
+    raft.add(mesh(new THREE.CylinderGeometry(0.032, 0.032, 1.38, 10), materials.woodLight, `PaddleShaft_${side}`, [side * 0.48, 0.34, 0.03], [Math.PI / 2, 0, side * 0.24]));
+    raft.add(mesh(roundedBoxGeometry(0.16, 0.34, 0.045, 0.03), materials.woodLight, `PaddleBlade_${side}`, [side * 0.64, 0.34, -0.61], [Math.PI / 2, 0, side * 0.24]));
+  }
+  mergeMeshesByMaterial(raft, "Raft");
+
+  const bob = new THREE.AnimationClip("Bob", 2.6, [
+    new THREE.VectorKeyframeTrack("RaftFloat.position", [0, 0.65, 1.3, 1.95, 2.6], [0, 0, 0, 0, 0.045, 0, 0, 0, 0, 0, -0.035, 0, 0, 0, 0]),
+    new THREE.QuaternionKeyframeTrack(
+      "RaftFloat.quaternion",
+      [0, 1.3, 2.6],
+      [0.018, 0, -0.012, 0.999, -0.018, 0, 0.012, 0.999, 0.018, 0, -0.012, 0.999]
+    )
+  ]);
+  root.userData.assetType = "raft";
+  root.userData.capacity = 3;
+  return { root, animations: [bob] };
+}
+
 function taperedLeafGeometry(length = 1, width = 0.3, bend = 0.16, segments = 7) {
   const positions = [];
   const indices = [];
@@ -490,6 +734,10 @@ assets.push(await exportModel("shark.glb", createShark));
 assets.push(await exportModel("tree-palm.glb", createPalm));
 assets.push(await exportModel("tree-coastal.glb", createCoastalTree));
 assets.push(await exportModel("tree-jungle.glb", createJungleTree));
+assets.push(await exportModel("kaiju.glb", createKaiju));
+assets.push(await exportModel("fire-dragon.glb", createFireDragon));
+assets.push(await exportModel("sea-serpent.glb", createSeaSerpent));
+assets.push(await exportModel("raft.glb", createRaft));
 await writeFile(resolve(outputDir, "manifest.json"), JSON.stringify({
   generatedAt: "2026-10-10",
   status: "preview-only",

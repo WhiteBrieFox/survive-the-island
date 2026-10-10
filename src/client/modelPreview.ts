@@ -14,7 +14,11 @@ const assets: Asset[] = [
   { file: "shark.glb", label: "鲨鱼", note: "完整体积模型，包含循环摆尾动画。" },
   { file: "tree-palm.glb", label: "椰子棕榈", note: "曲线树干、厚叶片和独立椰果，适合实例化。" },
   { file: "tree-coastal.glb", label: "海岸阔叶树", note: "宽树冠与外露根系，适合海滩和森林边缘。" },
-  { file: "tree-jungle.glb", label: "丛林树", note: "紧凑树冠，适合高密度森林格。" }
+  { file: "tree-jungle.glb", label: "丛林树", note: "紧凑树冠，适合高密度森林格。" },
+  { file: "kaiju.glb", label: "巨兽", note: "原创两栖岛屿巨兽，强调厚重、推撞与棋盘可读性，不复刻现有影视角色。" },
+  { file: "fire-dragon.glb", label: "终点火龙", note: "原创火山火龙守卫，用作救援终点附近的场景资产。" },
+  { file: "sea-serpent.glb", label: "海蛇", note: "红色热带海蛇，带波浪式游动动画和高辨识度背鳍。" },
+  { file: "raft.glb", label: "木筏", note: "可容纳三名探险者的六木结构，包含漂浮动画。" }
 ];
 
 document.querySelector<HTMLDivElement>("#preview-root")!.innerHTML = `
@@ -145,19 +149,32 @@ async function loadAsset(index: number) {
   const bounds = new THREE.Box3().setFromObject(model);
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
-  const targetHeight = asset.file.includes("tree") ? 2.8 : asset.file === "shark.glb" ? 1.55 : 2.65;
-  const scale = targetHeight / size.y;
+  const horizontalAssets = new Set(["shark.glb", "sea-serpent.glb", "raft.glb"]);
+  const targetSizes: Record<string, number> = {
+    "shark.glb": 2.8,
+    "sea-serpent.glb": 2.8,
+    "raft.glb": 2.35,
+    "fire-dragon.glb": 2.5,
+    "kaiju.glb": 2.75
+  };
+  const targetSize = asset.file.includes("tree") ? 2.8 : targetSizes[asset.file] ?? 2.65;
+  const sourceSize = horizontalAssets.has(asset.file) ? Math.max(size.x, size.z) : size.y;
+  const scale = targetSize / sourceSize;
+  const displayHeight = size.y * scale;
   model.scale.setScalar(scale);
   model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
   scene.add(model);
 
-  controls.target.set(0, targetHeight * 0.45, 0);
-  const mobileDistance = window.innerWidth <= 680 ? 1.34 : 1;
-  camera.position.set(
-    (asset.file === "shark.glb" ? 3.4 : 3.6) * mobileDistance,
-    targetHeight * (window.innerWidth <= 680 ? 0.88 : 0.78),
-    (asset.file === "shark.glb" ? 4.5 : 4.2) * mobileDistance
-  );
+  const targetY = Math.max(displayHeight * 0.45, 0.5);
+  controls.target.set(0, targetY, 0);
+  const displayWidth = Math.max(size.x, size.z) * scale;
+  const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+  const fitHeightDistance = displayHeight / (2 * Math.tan(verticalFov / 2));
+  const fitWidthDistance = displayWidth / (2 * Math.tan(horizontalFov / 2));
+  const distance = Math.max(fitHeightDistance, fitWidthDistance) * (window.innerWidth <= 680 ? 1.48 : 1.28);
+  const direction = new THREE.Vector3(0.56, 0.34, 0.76).normalize();
+  camera.position.copy(controls.target).add(direction.multiplyScalar(distance));
   controls.update();
 
   if (gltf.animations.length) {

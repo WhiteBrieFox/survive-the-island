@@ -43,6 +43,38 @@
       "animations": [
         "Sway"
       ]
+    },
+    {
+      "file": "kaiju.glb",
+      "triangles": 5268,
+      "meshes": 7,
+      "animations": [
+        "HeavyIdle"
+      ]
+    },
+    {
+      "file": "fire-dragon.glb",
+      "triangles": 4804,
+      "meshes": 12,
+      "animations": [
+        "GuardIdle"
+      ]
+    },
+    {
+      "file": "sea-serpent.glb",
+      "triangles": 1828,
+      "meshes": 6,
+      "animations": [
+        "SerpentSwim"
+      ]
+    },
+    {
+      "file": "raft.glb",
+      "triangles": 3672,
+      "meshes": 4,
+      "animations": [
+        "Bob"
+      ]
     }
   ]
 }
