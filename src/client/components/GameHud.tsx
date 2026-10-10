@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen, Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
-  LogOut, Navigation, RotateCcw, ScrollText, Shield, Users, Waves, X
+  LogOut, Navigation, ScrollText, Shield, Users, Waves, X
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { AbilityType, PublicRoomState, Role } from "../../shared/types";
 import { useGameStore } from "../gameStore";
 import { socket } from "../socket";
+import { ResultPanel } from "./ResultPanel";
 
 export function GameHud({
   room,
@@ -53,7 +54,6 @@ export function GameHud({
     room.pendingChoice?.type === "repellent" &&
     Boolean(clientId && room.pendingChoice.responderIds?.includes(clientId)) &&
     !room.pendingChoice.declinedIds?.includes(clientId ?? "");
-  const winners = room.players.filter((player) => room.winnerIds.includes(player.id));
   const phaseLabels: Record<typeof room.turnPhase, string> = {
     "setup-explorer": "放置探险者",
     "setup-raft": "放置木筏",
@@ -397,15 +397,12 @@ export function GameHud({
       )}
 
       {room.phase === "finished" && (
-        <section className="result-panel">
-          <span className="eyebrow">远征完成</span>
-          <h2>{winners.map((winner) => winner.name).join("、")} 获胜</h2>
-          <p>最高得分 {winners[0]?.score ?? 0}</p>
-          <button className="secondary-command" onClick={returnToLobby}>
-            <RotateCcw size={18} />
-            返回大厅
-          </button>
-        </section>
+        <ResultPanel
+          room={room}
+          clientId={clientId}
+          onOpenLog={() => openLog()}
+          onReturnToLobby={returnToLobby}
+        />
       )}
 
       {me && role === "player" && (
