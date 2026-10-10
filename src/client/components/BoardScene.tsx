@@ -2,12 +2,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { ContactShadows, Float, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import {
-  BufferGeometry, Color, Float32BufferAttribute, Group, LineSegments,
-  Mesh, MeshBasicMaterial, Vector3, type Material, type Object3D
+  AmbientLight, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group,
+  HemisphereLight, LineSegments, Mesh, MeshBasicMaterial, MeshPhysicalMaterial,
+  MeshStandardMaterial, Vector3, type Material, type Object3D
 } from "three";
 import { useShallow } from "zustand/react/shallow";
 import type { CreatureView, ExplorerView, PlayerColor, PublicRoomState, RaftView, Terrain, TileView, WaterSpaceView } from "../../shared/types";
 import { areAdjacent, createIslandCoords, hexToWorld } from "../../shared/hex";
+import { dayStageFor, type DayStage } from "../dayCycle";
 import { useGameStore } from "../gameStore";
 import { socket } from "../socket";
 
@@ -187,18 +189,30 @@ function tileVariant(id: string, count: number) {
   return value % count;
 }
 
-function Ocean() {
+function Ocean({ stage }: { stage: DayStage }) {
   const mesh = useRef<Mesh>(null);
-  useFrame(({ clock }) => {
+  const surfaceMaterial = useRef<MeshPhysicalMaterial>(null);
+  const depthMaterial = useRef<MeshStandardMaterial>(null);
+  const surfaceColor = useRef(new Color(stage.ocean));
+  const depthColor = useRef(new Color(stage.oceanDepth));
+  const targetSurface = useMemo(() => new Color(stage.ocean), [stage.ocean]);
+  const targetDepth = useMemo(() => new Color(stage.oceanDepth), [stage.oceanDepth]);
+
+  useFrame(({ clock }, delta) => {
     if (!mesh.current) return;
     mesh.current.position.y = -0.46 + Math.sin(clock.elapsedTime * 0.7) * 0.035;
     mesh.current.rotation.z = Math.sin(clock.elapsedTime * 0.09) * 0.015;
+    surfaceColor.current.lerp(targetSurface, Math.min(1, delta * 0.8));
+    depthColor.current.lerp(targetDepth, Math.min(1, delta * 0.8));
+    surfaceMaterial.current?.color.copy(surfaceColor.current);
+    depthMaterial.current?.color.copy(depthColor.current);
   });
   return (
     <group>
       <mesh ref={mesh} rotation-x={-Math.PI / 2} receiveShadow>
         <circleGeometry args={[19, 128]} />
         <meshPhysicalMaterial
+          ref={surfaceMaterial}
           color="#149bb2"
           roughness={0.16}
           metalness={0.08}
@@ -210,7 +224,7 @@ function Ocean() {
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position-y={-0.5}>
         <circleGeometry args={[20, 96]} />
-        <meshStandardMaterial color="#064b64" roughness={0.72} />
+        <meshStandardMaterial ref={depthMaterial} color="#064b64" roughness={0.72} />
       </mesh>
       {[7.8, 11.8, 15.8].map((radius) => (
         <mesh key={radius} rotation-x={-Math.PI / 2} position-y={-0.39}>
@@ -219,6 +233,70 @@ function Ocean() {
         </mesh>
       ))}
     </group>
+  );
+}
+
+function DayLighting({ stage }: { stage: DayStage }) {
+  const ambient = useRef<AmbientLight>(null);
+  const sunlight = useRef<DirectionalLight>(null);
+  const hemisphere = useRef<HemisphereLight>(null);
+  const background = useRef(new Color(stage.sky));
+  const fog = useRef(new Color(stage.fog));
+  const sunPosition = useRef(new Vector3(...stage.sun));
+  const targetBackground = useMemo(() => new Color(stage.sky), [stage.sky]);
+  const targetFog = useMemo(() => new Color(stage.fog), [stage.fog]);
+  const targetSun = useMemo(() => new Vector3(...stage.sun), [stage.sun]);
+  const targetSunColor = useMemo(() => new Color(stage.sunColor), [stage.sunColor]);
+  const targetHemisphereSky = useMemo(() => new Color(stage.hemisphereSky), [stage.hemisphereSky]);
+  const targetHemisphereGround = useMemo(() => new Color(stage.hemisphereGround), [stage.hemisphereGround]);
+
+  useFrame(({ scene }, delta) => {
+    const colorStep = Math.min(1, delta * 0.75);
+    background.current.lerp(targetBackground, colorStep);
+    fog.current.lerp(targetFog, colorStep);
+    scene.background = background.current;
+    if (scene.fog) scene.fog.color.copy(fog.current);
+
+    if (ambient.current) {
+      ambient.current.intensity += (stage.ambient - ambient.current.intensity) * Math.min(1, delta * 0.8);
+    }
+    if (sunlight.current) {
+      sunPosition.current.lerp(targetSun, Math.min(1, delta * 0.7));
+      sunlight.current.position.copy(sunPosition.current);
+      sunlight.current.color.lerp(targetSunColor, Math.min(1, delta * 0.9));
+      sunlight.current.intensity += (stage.sunIntensity - sunlight.current.intensity) * Math.min(1, delta * 0.8);
+    }
+    if (hemisphere.current) {
+      hemisphere.current.color.lerp(targetHemisphereSky, colorStep);
+      hemisphere.current.groundColor.lerp(targetHemisphereGround, colorStep);
+      hemisphere.current.intensity +=
+        (stage.hemisphereIntensity - hemisphere.current.intensity) * Math.min(1, delta * 0.8);
+    }
+  });
+
+  return (
+    <>
+      <color attach="background" args={[stage.sky]} />
+      <fog attach="fog" args={[stage.fog, 64, 136]} />
+      <ambientLight ref={ambient} intensity={stage.ambient} />
+      <directionalLight
+        ref={sunlight}
+        position={stage.sun}
+        intensity={stage.sunIntensity}
+        color={stage.sunColor}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-30}
+        shadow-camera-right={30}
+        shadow-camera-top={30}
+        shadow-camera-bottom={-30}
+        shadow-camera-far={80}
+      />
+      <hemisphereLight
+        ref={hemisphere}
+        args={[stage.hemisphereSky, stage.hemisphereGround, stage.hemisphereIntensity]}
+      />
+    </>
   );
 }
 
@@ -736,6 +814,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   const sinkTimers = useRef(new Map<string, number>());
   const [sinkingTiles, setSinkingTiles] = useState<TileView[]>([]);
   const [sinkRequestPending, setSinkRequestPending] = useState(false);
+  const dayStage = dayStageFor(room);
 
   useEffect(() => {
     if (!room) {
@@ -957,27 +1036,12 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
 
   return (
     <>
-      <color attach="background" args={["#063f52"]} />
-      <fog attach="fog" args={["#0a5063", 64, 136]} />
-      <ambientLight intensity={1.08} />
-      <directionalLight
-        position={[16, 28, 12]}
-        intensity={2.8}
-        color="#fff4d5"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
-        shadow-camera-far={80}
-      />
-      <hemisphereLight args={["#d9fbf5", "#174336", 1.28]} />
+      <DayLighting stage={dayStage} />
       <group scale={BOARD_SCALE}>
-        <Ocean />
+        <Ocean stage={dayStage} />
         <OceanDecorations spaces={oceanDecorations} />
         {room && <RouteGrid spaces={allSpaces} tiles={room.tiles} />}
-        <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color="#bdeff2" position-y={0.1} />
+        <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color={dayStage.sparkle} position-y={0.1} />
         {room?.tiles.length ? (
           <>
             {room.tiles.map((tile) => (

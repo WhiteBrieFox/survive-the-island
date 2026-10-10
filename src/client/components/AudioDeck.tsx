@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Music, Volume2, VolumeX } from "lucide-react";
 import type { PublicRoomState } from "../../shared/types";
+import { dayStageFor } from "../dayCycle";
 import { soundForGameEvent } from "../gameSound";
 import { playSound, stopSounds } from "../sampleSoundDesign";
 
@@ -29,26 +30,32 @@ function loadMixer() {
 function bgmFor(room: PublicRoomState | null) {
   if (!room || room.phase === "lobby") return "/assets/audio/lobby-1.m4a";
   if (room.phase === "finished") return "/assets/audio/finale-1.m4a";
-  if (room.volcanoes >= Math.max(1, room.maxVolcanoes - 1)) return "/assets/audio/crisis-1.m4a";
-  return "/assets/audio/exploration-1.m4a";
+  return dayStageFor(room).track;
 }
 
 export function AudioDeck({ room }: { room: PublicRoomState | null }) {
   const [mixer, setMixer] = useState(loadMixer);
   const [open, setOpen] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
-  const bgmRef = useRef<HTMLAudioElement>(null);
+  const firstBgmRef = useRef<HTMLAudioElement>(null);
+  const secondBgmRef = useRef<HTMLAudioElement>(null);
+  const activeBgmIndex = useRef(0);
+  const currentTrack = useRef("");
+  const fadeFrame = useRef<number | null>(null);
+  const bgmVolume = useRef(mixer.bgm);
   const previousEventId = useRef<number | null>(null);
   const track = bgmFor(room);
 
   useEffect(() => {
     localStorage.setItem("island-audio", JSON.stringify(mixer));
+    bgmVolume.current = mixer.bgm;
   }, [mixer]);
 
   const unlockAudio = () => {
     setUnlocked(true);
     if (mixer.muted) return;
-    void bgmRef.current?.play().catch(() => undefined);
+    const channels = [firstBgmRef.current, secondBgmRef.current];
+    void channels[activeBgmIndex.current]?.play().catch(() => undefined);
   };
 
   useEffect(() => {
@@ -65,30 +72,87 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
   }, [unlocked]);
 
   useEffect(() => {
-    const bgm = bgmRef.current;
-    if (!bgm) return;
-    if (bgm.dataset.track !== track) {
-      bgm.pause();
-      bgm.currentTime = 0;
-      bgm.src = track;
-      bgm.dataset.track = track;
-      bgm.load();
+    const channels = [firstBgmRef.current, secondBgmRef.current];
+    if (!channels[0] || !channels[1]) return;
+    const active = channels[activeBgmIndex.current]!;
+
+    if (!currentTrack.current) {
+      active.src = track;
+      active.dataset.track = track;
+      active.volume = mixer.muted ? 0 : mixer.bgm;
+      active.load();
+      currentTrack.current = track;
     }
-    bgm.volume = mixer.muted ? 0 : mixer.bgm;
-    if (!unlocked || mixer.muted) {
-      bgm.pause();
+
+    if (currentTrack.current === track) {
+      active.volume = mixer.muted ? 0 : mixer.bgm;
+      if (!unlocked || mixer.muted) active.pause();
+      else void active.play().catch(() => setUnlocked(false));
       return;
     }
-    void bgm.play().catch(() => setUnlocked(false));
-  }, [mixer.bgm, mixer.muted, track, unlocked]);
+
+    if (fadeFrame.current !== null) cancelAnimationFrame(fadeFrame.current);
+    const nextIndex = activeBgmIndex.current === 0 ? 1 : 0;
+    const next = channels[nextIndex]!;
+    next.pause();
+    next.src = track;
+    next.dataset.track = track;
+    next.currentTime = 0;
+    next.volume = 0;
+    next.load();
+
+    if (!unlocked || mixer.muted) {
+      active.pause();
+      active.currentTime = 0;
+      active.volume = 0;
+      activeBgmIndex.current = nextIndex;
+      currentTrack.current = track;
+      return;
+    }
+
+    void next.play().catch(() => setUnlocked(false));
+    const started = performance.now();
+    const duration = 1600;
+    const fade = () => {
+      const progress = Math.min(1, (performance.now() - started) / duration);
+      const volume = bgmVolume.current;
+      active.volume = volume * (1 - progress);
+      next.volume = volume * progress;
+      if (progress < 1) {
+        fadeFrame.current = requestAnimationFrame(fade);
+        return;
+      }
+      active.pause();
+      active.currentTime = 0;
+      active.volume = 0;
+      activeBgmIndex.current = nextIndex;
+      currentTrack.current = track;
+      fadeFrame.current = null;
+    };
+    fadeFrame.current = requestAnimationFrame(fade);
+
+    return () => {
+      if (fadeFrame.current !== null) cancelAnimationFrame(fadeFrame.current);
+      fadeFrame.current = null;
+    };
+  }, [mixer.muted, track, unlocked]);
+
+  useEffect(() => {
+    const channels = [firstBgmRef.current, secondBgmRef.current];
+    const active = channels[activeBgmIndex.current];
+    if (!active || fadeFrame.current !== null) return;
+    active.volume = mixer.muted ? 0 : mixer.bgm;
+  }, [mixer.bgm, mixer.muted]);
 
   useEffect(() => () => {
-    const bgm = bgmRef.current;
-    if (!bgm) return;
-    bgm.pause();
-    bgm.currentTime = 0;
-    bgm.removeAttribute("src");
-    bgm.load();
+    if (fadeFrame.current !== null) cancelAnimationFrame(fadeFrame.current);
+    [firstBgmRef.current, secondBgmRef.current].forEach((bgm) => {
+      if (!bgm) return;
+      bgm.pause();
+      bgm.currentTime = 0;
+      bgm.removeAttribute("src");
+      bgm.load();
+    });
     stopSounds("game");
   }, []);
 
@@ -126,7 +190,8 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
 
   return (
     <div className="audio-deck">
-      <audio ref={bgmRef} loop preload="auto" />
+      <audio ref={firstBgmRef} loop preload="auto" />
+      <audio ref={secondBgmRef} loop preload="auto" />
       <button
         className="icon-button audio-toggle"
         title={mixer.muted ? "开启音乐" : unlocked ? "音乐设置" : "点击开启音乐"}

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  BookOpen, Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
+  BookOpen, Bot, ChevronRight, Clock3, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
   LogOut, Navigation, ScrollText, Shield, Users, Waves, X
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { AbilityType, PublicRoomState, Role } from "../../shared/types";
+import { dayStageFor } from "../dayCycle";
 import { useGameStore } from "../gameStore";
 import { socket } from "../socket";
 import { ResultPanel } from "./ResultPanel";
@@ -48,6 +49,7 @@ export function GameHud({
   }, [boardingChoice?.raftId]);
 
   const current = room.players.find((player) => player.id === room.currentPlayerId);
+  const dayStage = dayStageFor(room);
   const me = room.players.find((player) => player.id === clientId);
   const myTurn = role === "player" && room.currentPlayerId === clientId;
   const canRespondRepellent = role === "player" &&
@@ -141,6 +143,7 @@ export function GameHud({
         </div>
         <div className="round-readout">
           <span>第 {room.round} 轮</span>
+          <span><Clock3 size={15} />{dayStage.time} · {dayStage.label}</span>
           <span><Flame size={16} />{room.volcanoes}/{room.maxVolcanoes}</span>
           {role === "spectator" && <span><Eye size={16} />观战</span>}
         </div>
