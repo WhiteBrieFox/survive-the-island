@@ -371,7 +371,7 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
       explorerId, value: explorer.value
     });
   } else {
-    recordEvent(room, "explorer-moved", `${player.name} 移动了一名探险者`, playerId, {
+    recordEvent(room, swims ? "swimmer-moved" : "explorer-moved", `${player.name} 移动了一名探险者`, playerId, {
       explorerId, targetId
     });
     resolveInteractions(room, targetId);

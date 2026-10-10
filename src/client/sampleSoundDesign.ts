@@ -245,46 +245,68 @@ export const soundDefinitions: SoundDefinition[] = [
 const playing = new Set<HTMLAudioElement>();
 const timers = new Set<number>();
 
-export function stopSoundPreview() {
-  timers.forEach((timer) => window.clearTimeout(timer));
-  timers.clear();
-  playing.forEach((audio) => {
+type SoundChannel = "preview" | "game";
+
+const channelAudio: Record<SoundChannel, Set<HTMLAudioElement>> = {
+  preview: playing,
+  game: new Set<HTMLAudioElement>()
+};
+const channelTimers: Record<SoundChannel, Set<number>> = {
+  preview: timers,
+  game: new Set<number>()
+};
+
+export function stopSounds(channel: SoundChannel = "preview") {
+  channelTimers[channel].forEach((timer) => window.clearTimeout(timer));
+  channelTimers[channel].clear();
+  channelAudio[channel].forEach((audio) => {
     audio.pause();
     audio.currentTime = 0;
   });
-  playing.clear();
+  channelAudio[channel].clear();
 }
 
-function schedule(layer: SoundLayer, masterVolume: number) {
+export function stopSoundPreview() {
+  stopSounds("preview");
+}
+
+function schedule(layer: SoundLayer, masterVolume: number, channel: SoundChannel, baseDelay: number) {
+  const timersForChannel = channelTimers[channel];
+  const audioForChannel = channelAudio[channel];
   const timer = window.setTimeout(() => {
-    timers.delete(timer);
+    timersForChannel.delete(timer);
     const audio = new Audio(layer.src);
     audio.preload = "auto";
     audio.volume = Math.max(0, Math.min(1, layer.volume * masterVolume));
     audio.playbackRate = layer.playbackRate ?? 1;
-    playing.add(audio);
+    audioForChannel.add(audio);
 
     const start = () => {
       if (layer.startAt) audio.currentTime = Math.min(layer.startAt, Math.max(0, audio.duration - 0.05));
-      void audio.play().catch(() => playing.delete(audio));
+      void audio.play().catch(() => audioForChannel.delete(audio));
     };
     if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) start();
     else audio.addEventListener("loadedmetadata", start, { once: true });
 
-    audio.addEventListener("ended", () => playing.delete(audio), { once: true });
+    audio.addEventListener("ended", () => audioForChannel.delete(audio), { once: true });
     if (layer.stopAfter) {
       const stopTimer = window.setTimeout(() => {
-        timers.delete(stopTimer);
+        timersForChannel.delete(stopTimer);
         audio.pause();
-        playing.delete(audio);
+        audioForChannel.delete(audio);
       }, layer.stopAfter * 1000);
-      timers.add(stopTimer);
+      timersForChannel.add(stopTimer);
     }
-  }, (layer.delay ?? 0) * 1000);
-  timers.add(timer);
+  }, (baseDelay + (layer.delay ?? 0)) * 1000);
+  timersForChannel.add(timer);
 }
 
-export async function playSound(id: SoundId, volume = 0.72) {
-  stopSoundPreview();
-  layers[id].forEach((layer) => schedule(layer, volume));
+export function playSound(
+  id: SoundId,
+  volume = 0.72,
+  options: { channel?: SoundChannel; interrupt?: boolean; delay?: number } = {}
+) {
+  const channel = options.channel ?? "preview";
+  if (options.interrupt ?? channel === "preview") stopSounds(channel);
+  layers[id].forEach((layer) => schedule(layer, volume, channel, options.delay ?? 0));
 }

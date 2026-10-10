@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Music, Volume2, VolumeX } from "lucide-react";
 import type { PublicRoomState } from "../../shared/types";
+import { soundForGameEvent } from "../gameSound";
+import { playSound, stopSounds } from "../sampleSoundDesign";
 
 type Mixer = {
   bgm: number;
@@ -29,15 +31,6 @@ function bgmFor(room: PublicRoomState | null) {
   if (room.phase === "finished") return "/assets/audio/finale-1.m4a";
   if (room.volcanoes >= Math.max(1, room.maxVolcanoes - 1)) return "/assets/audio/crisis-1.m4a";
   return "/assets/audio/exploration-1.m4a";
-}
-
-function sfxFor(eventType: string) {
-  if (eventType === "creature-die") return "/assets/audio/sfx-dice.m4a";
-  if (eventType === "kaiju-attack" || eventType === "creature-spawned") return "/assets/audio/sfx-kaiju.m4a";
-  if (["shark-attack", "sea-serpent-attack", "whirlpool", "volcano"].includes(eventType)) {
-    return "/assets/audio/sfx-attack.m4a";
-  }
-  return null;
 }
 
 export function AudioDeck({ room }: { room: PublicRoomState | null }) {
@@ -96,23 +89,40 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
     bgm.currentTime = 0;
     bgm.removeAttribute("src");
     bgm.load();
+    stopSounds("game");
   }, []);
 
   useEffect(() => {
-    const event = room?.events.at(-1);
-    if (!event || previousEventId.current === null) {
-      previousEventId.current = event?.id ?? null;
+    const currentRoom = room;
+    if (!currentRoom) {
+      previousEventId.current = null;
+      stopSounds("game");
       return;
     }
-    if (event.id === previousEventId.current) return;
-    previousEventId.current = event.id;
+    const newestEvent = currentRoom.events.at(-1);
+    if (!newestEvent || previousEventId.current === null) {
+      previousEventId.current = newestEvent?.id ?? null;
+      return;
+    }
+    if (newestEvent.id <= previousEventId.current) return;
+    const unseenEvents = currentRoom.events.filter((event) => event.id > previousEventId.current!);
+    previousEventId.current = newestEvent.id;
     if (!unlocked || mixer.muted || mixer.sfx <= 0) return;
-    const source = sfxFor(event.type);
-    if (!source) return;
-    const effect = new Audio(source);
-    effect.volume = mixer.sfx;
-    void effect.play().catch(() => undefined);
-  }, [mixer.muted, mixer.sfx, room?.events, unlocked]);
+    const sounds = unseenEvents
+      .map((event) => soundForGameEvent(event, currentRoom))
+      .filter((sound): sound is NonNullable<typeof sound> => sound !== null);
+    sounds.forEach((sound, index) => {
+      playSound(sound, mixer.sfx, {
+        channel: "game",
+        interrupt: false,
+        delay: index * 0.28
+      });
+    });
+  }, [mixer.muted, mixer.sfx, room, unlocked]);
+
+  useEffect(() => {
+    if (mixer.muted || mixer.sfx <= 0) stopSounds("game");
+  }, [mixer.muted, mixer.sfx]);
 
   return (
     <div className="audio-deck">
