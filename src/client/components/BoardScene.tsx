@@ -22,6 +22,34 @@ const terrainColor: Record<Terrain, string> = {
   mountain: "#7d7b82"
 };
 
+const terrainPadColor: Record<Terrain, string> = {
+  beach: "#f0d890",
+  forest: "#6caf72",
+  mountain: "#98979c"
+};
+
+const landUnitSlots: Array<[number, number]> = [
+  [0.52, 0.46],
+  [-0.02, 0.74],
+  [0.78, -0.08],
+  [0.3, -0.72],
+  [-0.48, 0.52],
+  [-0.7, -0.08]
+];
+
+const waterUnitSlots: Array<[number, number]> = [
+  [0.34, 0.24],
+  [-0.34, 0.24],
+  [0, -0.38],
+  [0.54, -0.22],
+  [-0.54, -0.22]
+];
+
+type UnitPlacement = {
+  x: number;
+  z: number;
+};
+
 const modelPath = (name: string) => `/assets/models-preview/${name}.glb`;
 
 type AssetModelProps = {
@@ -142,32 +170,24 @@ function Ocean() {
 
 function TerrainDetails({ terrain, tileId }: { terrain: Terrain; tileId: string }) {
   if (terrain === "forest") {
-    const trees = ["tree-jungle", "tree-coastal", "tree-palm"];
-    const variant = tileVariant(tileId, trees.length);
     return (
-      <group position={[0, 0.2, 0]}>
-        <AssetModel name="terrain-forest" scale={0.92} />
-        <AssetModel
-          name={trees[variant]}
-          position={[variant === 1 ? -0.12 : 0.12, 0.08, variant === 2 ? 0.08 : -0.04]}
-          rotation={[0, variant * 1.7, 0]}
-          scale={variant === 2 ? 0.31 : 0.34}
-        />
+      <group position={[-0.36, 0.2, -0.4]}>
+        <AssetModel name="terrain-forest" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.6} />
       </group>
     );
   }
   if (terrain === "mountain") {
     return (
-      <group position={[0, 0.28, 0]}>
-        <AssetModel name="terrain-mountain" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.98} />
+      <group position={[-0.36, 0.28, -0.4]}>
+        <AssetModel name="terrain-mountain" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.62} />
       </group>
     );
   }
   return (
-    <group position={[0, 0.2, 0]}>
-      <AssetModel name="terrain-beach" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.98} />
+    <group position={[-0.34, 0.2, -0.38]}>
+      <AssetModel name="terrain-beach" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.66} />
       {tileVariant(tileId, 4) === 0 && (
-        <AssetModel name="tree-palm" position={[-0.18, 0.08, 0.08]} rotation={[0, 0.6, 0]} scale={0.27} />
+        <AssetModel name="tree-palm" position={[-0.14, 0.06, -0.16]} rotation={[0, 0.6, 0]} scale={0.18} />
       )}
     </group>
   );
@@ -241,7 +261,7 @@ function Tile({
       }}
     >
       <mesh castShadow receiveShadow scale-y={hovered || selected ? 1.08 : 1}>
-        <cylinderGeometry args={[1, 1.04, tile.terrain === "mountain" ? 0.5 : 0.38, 6]} />
+        <cylinderGeometry args={[1.06, 1.1, tile.terrain === "mountain" ? 0.5 : 0.38, 6]} />
         <meshStandardMaterial
           color={terrainColor[tile.terrain]}
           roughness={0.82}
@@ -250,10 +270,18 @@ function Tile({
         />
       </mesh>
       <mesh position-y={tile.terrain === "mountain" ? -0.25 : -0.19} receiveShadow>
-        <cylinderGeometry args={[1.04, 0.92, 0.18, 6]} />
+        <cylinderGeometry args={[1.1, 0.98, 0.18, 6]} />
         <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
       </mesh>
       <TerrainDetails terrain={tile.terrain} tileId={tile.id} />
+      <mesh
+        position={[0.36, tile.terrain === "mountain" ? 0.265 : 0.205, 0.38]}
+        rotation-x={-Math.PI / 2}
+        receiveShadow
+      >
+        <circleGeometry args={[0.52, 6]} />
+        <meshStandardMaterial color={terrainPadColor[tile.terrain]} roughness={0.92} />
+      </mesh>
       {(highlighted || selected) && (
         <mesh rotation-x={-Math.PI / 2} position-y={0.28}>
           <ringGeometry args={[0.72, 0.86, 6]} />
@@ -270,7 +298,8 @@ function Explorer({
   index,
   selected,
   onClick,
-  tiles
+  tiles,
+  placement
 }: {
   explorer: ExplorerView;
   color: string;
@@ -278,28 +307,18 @@ function Explorer({
   selected: boolean;
   onClick: () => void;
   tiles: TileView[];
+  placement?: UnitPlacement;
 }) {
   const tile = tiles.find((candidate) => candidate.id === explorer.locationId);
   if (!tile || explorer.rescued || explorer.lost) return null;
   const { x, z } = hexToWorld(tile);
   const raftSeats: Array<[number, number]> = [[-0.28, 0.16], [0.28, 0.16], [0, -0.28]];
-  const landSeats: Array<[number, number]> = [
-    [0.48, 0.5],
-    [-0.16, 0.64],
-    [0.66, -0.08],
-    [-0.62, 0.18],
-    [0.2, -0.62],
-    [-0.42, -0.5]
-  ];
-  const swimSeats: Array<[number, number]> = [[0, 0], [0.28, 0.2], [-0.28, 0.2], [0, -0.3]];
   const raftSeat = raftSeats[index % raftSeats.length];
-  const landSeat = landSeats[index % landSeats.length];
-  const swimSeat = swimSeats[index % swimSeats.length];
   const [offsetX, offsetZ] = explorer.raftId
     ? raftSeat
-    : explorer.swimming
-      ? swimSeat
-      : landSeat;
+    : placement
+      ? [placement.x, placement.z]
+      : [0, 0];
   const terrainHeight = "terrain" in tile && tile.active
     ? tile.terrain === "mountain" ? 0.62 : 0.42
     : -0.04;
@@ -370,17 +389,42 @@ function RaftPiece({ raft, space, selected, onClick }: { raft: RaftView; space: 
   );
 }
 
-function CreaturePiece({ creature, space, selected, onClick }: { creature: CreatureView; space: TileView | WaterSpaceView; selected: boolean; onClick: () => void }) {
+function CreaturePiece({
+  creature,
+  space,
+  selected,
+  onClick,
+  placement
+}: {
+  creature: CreatureView;
+  space: TileView | WaterSpaceView;
+  selected: boolean;
+  onClick: () => void;
+  placement?: UnitPlacement;
+}) {
   const { x, z } = hexToWorld(space);
+  const activeLand = "terrain" in space && space.active && !space.isRescue;
+  const landHeight = activeLand ? (space.terrain === "mountain" ? 0.56 : 0.36) : 0;
   const settings = creature.type === "shark"
-    ? { name: "shark", scale: 0.38, y: 0.02, rotation: -0.5 }
+    ? { name: "shark", scale: 0.38, y: 0.02, rotation: -0.5, x: 0, z: 0 }
     : creature.type === "sea-serpent"
-      ? { name: "sea-serpent", scale: 0.4, y: 0.02, rotation: 0.35 }
-      : { name: "kaiju", scale: 0.34, y: 0.12, rotation: 0.15 };
+      ? { name: "sea-serpent", scale: 0.4, y: 0.02, rotation: 0.35, x: 0, z: 0 }
+      : {
+          name: "kaiju",
+          scale: activeLand ? 0.31 : 0.34,
+          y: activeLand ? landHeight : 0.12,
+          rotation: 0.15,
+          x: placement?.x ?? 0,
+          z: placement?.z ?? 0
+        };
+  if (creature.type !== "kaiju") {
+    settings.x = placement?.x ?? 0;
+    settings.z = placement?.z ?? 0;
+  }
   return (
     <Float speed={1.8} floatIntensity={0.12} rotationIntensity={0.08}>
       <group
-        position={[x, settings.y, z]}
+        position={[x + settings.x, settings.y, z + settings.z]}
         scale={selected ? 1.2 : 1}
         onClick={(event) => { event.stopPropagation(); onClick(); }}
       >
@@ -389,6 +433,12 @@ function CreaturePiece({ creature, space, selected, onClick }: { creature: Creat
           rotation={[0, settings.rotation + tileVariant(creature.id, 8) * Math.PI / 4, 0]}
           scale={settings.scale}
         />
+        {creature.type === "kaiju" && (
+          <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+            <circleGeometry args={[0.38, 28]} />
+            <meshBasicMaterial color="#173d70" transparent opacity={0.55} />
+          </mesh>
+        )}
         {selected && (
           <mesh rotation-x={-Math.PI / 2} position-y={-0.04}>
             <ringGeometry args={[0.5, 0.64, 28]} />
@@ -460,6 +510,37 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   const selectedCreatureSpace = allSpaces.find((space) => space.id === selectedCreature?.locationId);
   const myTurn = room?.currentPlayerId === clientId && role === "player";
   const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
+  const unitPlacements = useMemo(() => {
+    const placements = new Map<string, UnitPlacement>();
+    if (!room) return placements;
+
+    for (const space of allSpaces) {
+      const tile = room.tiles.find((candidate) => candidate.id === space.id);
+      const slots = tile?.active && !tile.isRescue ? landUnitSlots : waterUnitSlots;
+      const units = [
+        ...room.creatures
+          .filter((creature) => creature.locationId === space.id)
+          .map((creature) => ({
+            id: creature.id,
+            priority: creature.type === "kaiju" ? 0 : creature.type === "sea-serpent" ? 1 : 2
+          })),
+        ...room.explorers
+          .filter((explorer) =>
+            explorer.locationId === space.id &&
+            !explorer.raftId &&
+            !explorer.lost &&
+            !explorer.rescued
+          )
+          .map((explorer) => ({ id: explorer.id, priority: 3 }))
+      ].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
+
+      units.forEach((unit, index) => {
+        const slot = slots[index % slots.length];
+        placements.set(unit.id, { x: slot[0], z: slot[1] });
+      });
+    }
+    return placements;
+  }, [allSpaces, room]);
   const oceanDecorations = useMemo(() => {
     if (!room) return [];
     const occupied = new Set([
@@ -637,7 +718,16 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                 (!room.pendingChoice.creatureId || room.pendingChoice.creatureId === creature.id)) ||
               (room.turnPhase === "action" && (activeAbility === "dive" || activeAbility === "repellent"))
             );
-            return <CreaturePiece key={creature.id} creature={creature} space={space} selected={creature.id === selectedCreatureId} onClick={() => selectable && selectCreature(creature.id === selectedCreatureId ? null : creature.id)} />;
+            return (
+              <CreaturePiece
+                key={creature.id}
+                creature={creature}
+                space={space}
+                selected={creature.id === selectedCreatureId}
+                placement={unitPlacements.get(creature.id)}
+                onClick={() => selectable && selectCreature(creature.id === selectedCreatureId ? null : creature.id)}
+              />
+            );
           })}
           {room.explorers.map((explorer, index) => {
             const player = room.players.find((candidate) => candidate.id === explorer.ownerId);
@@ -661,6 +751,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                 index={locationIndex >= 0 ? locationIndex : index}
                 selected={explorer.id === selectedExplorerId}
                 tiles={allSpaces as TileView[]}
+                placement={unitPlacements.get(explorer.id)}
                 onClick={() => selectable && selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id)}
               />
             );
