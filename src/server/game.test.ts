@@ -137,6 +137,16 @@ describe("complete game core", () => {
     expect(publicState(room, "host").explorers.every((item) => item.value === undefined)).toBe(true);
   });
 
+  it("only exposes volcano and whirlpool effects after their tile is revealed", () => {
+    const room = startedRoom();
+    const hiddenHazard = room.tiles.find((tile) => tile.effect === "volcano" || tile.effect === "whirlpool")!;
+    expect(publicState(room, "host").tiles.find((tile) => tile.id === hiddenHazard.id)?.revealedEffect).toBeUndefined();
+
+    hiddenHazard.active = false;
+    const revealed = publicState(room, "host").tiles.find((tile) => tile.id === hiddenHazard.id);
+    expect(revealed?.revealedEffect).toBe(hiddenHazard.effect);
+  });
+
   it("enforces one swimming move per explorer each turn", () => {
     const room = startedRoom();
     const explorer = room.explorers.find((item) => {

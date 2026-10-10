@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from "react";
-import { ContactShadows, Float, OrbitControls, Sparkles } from "@react-three/drei";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ContactShadows, Float, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import type { Mesh } from "three";
+import { Color, Group, Mesh, type Material, type Object3D } from "three";
 import { useShallow } from "zustand/react/shallow";
 import type { CreatureView, ExplorerView, PlayerColor, PublicRoomState, RaftView, Terrain, TileView, WaterSpaceView } from "../../shared/types";
 import { areAdjacent, createIslandCoords, hexToWorld } from "../../shared/hex";
@@ -21,6 +21,90 @@ const terrainColor: Record<Terrain, string> = {
   forest: "#4f9a68",
   mountain: "#7d7b82"
 };
+
+const modelPath = (name: string) => `/assets/models-preview/${name}.glb`;
+
+type AssetModelProps = {
+  name: string;
+  color?: string;
+  animate?: boolean;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: number | [number, number, number];
+};
+
+function prepareModel(source: Object3D, color?: string) {
+  const clone = source.clone(true);
+  clone.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+    if (!color) return;
+    const recolor = (sourceMaterial: Material) => {
+      const material = sourceMaterial.clone();
+      if (material.name === "PlayerColor" && "color" in material) {
+        (material.color as Color).set(color);
+      }
+      return material;
+    };
+    object.material = Array.isArray(object.material)
+      ? object.material.map(recolor)
+      : recolor(object.material);
+  });
+  return clone;
+}
+
+function AssetModel({
+  name,
+  color,
+  animate = true,
+  position = [0, 0, 0],
+  rotation = [0, 0, 0],
+  scale = 1
+}: AssetModelProps) {
+  const group = useRef<Group>(null);
+  const { scene, animations } = useGLTF(modelPath(name));
+  const model = useMemo(() => prepareModel(scene, color), [color, scene]);
+  const { actions } = useAnimations(animations, group);
+
+  useEffect(() => {
+    if (!animate) return;
+    Object.values(actions).forEach((action) => action?.reset().fadeIn(0.2).play());
+    return () => Object.values(actions).forEach((action) => action?.fadeOut(0.15));
+  }, [actions, animate]);
+
+  return (
+    <group ref={group} position={position} rotation={rotation} scale={scale}>
+      <primitive object={model} />
+    </group>
+  );
+}
+
+[
+  "explorer",
+  "shark",
+  "tree-palm",
+  "tree-coastal",
+  "tree-jungle",
+  "kaiju",
+  "fire-dragon",
+  "sea-serpent",
+  "raft",
+  "volcano",
+  "rescue-dock",
+  "whirlpool",
+  "coral-reef",
+  "floating-debris",
+  "terrain-beach",
+  "terrain-forest",
+  "terrain-mountain"
+].forEach((name) => useGLTF.preload(modelPath(name)));
+
+function tileVariant(id: string, count: number) {
+  let value = 0;
+  for (const character of id) value = (value * 31 + character.charCodeAt(0)) >>> 0;
+  return value % count;
+}
 
 function Ocean() {
   const mesh = useRef<Mesh>(null);
@@ -57,63 +141,35 @@ function Ocean() {
   );
 }
 
-function TerrainDetails({ terrain }: { terrain: Terrain }) {
+function TerrainDetails({ terrain, tileId }: { terrain: Terrain; tileId: string }) {
   if (terrain === "forest") {
+    const trees = ["tree-jungle", "tree-coastal", "tree-palm"];
+    const variant = tileVariant(tileId, trees.length);
     return (
-      <group position={[0, 0.35, 0]}>
-        {[-0.38, -0.08, 0.28].map((x, index) => (
-          <group key={x} position={[x, index === 1 ? 0.1 : 0, index === 1 ? 0.14 : -0.1]}>
-            <mesh castShadow position-y={0.1}>
-              <cylinderGeometry args={[0.045, 0.065, 0.3, 7]} />
-              <meshStandardMaterial color="#68452d" />
-            </mesh>
-            <mesh castShadow position-y={0.35}>
-              <coneGeometry args={[index === 1 ? 0.26 : 0.22, index === 1 ? 0.56 : 0.46, 8]} />
-              <meshStandardMaterial color={index === 1 ? "#12684e" : "#2a8a58"} roughness={0.76} />
-            </mesh>
-          </group>
-        ))}
-        <mesh castShadow position={[0.3, 0.08, 0.34]}>
-          <dodecahedronGeometry args={[0.13, 0]} />
-          <meshStandardMaterial color="#3b7650" roughness={0.9} />
-        </mesh>
+      <group position={[0, 0.2, 0]}>
+        <AssetModel name="terrain-forest" scale={0.92} />
+        <AssetModel
+          name={trees[variant]}
+          position={[variant === 1 ? -0.12 : 0.12, 0.08, variant === 2 ? 0.08 : -0.04]}
+          rotation={[0, variant * 1.7, 0]}
+          scale={variant === 2 ? 0.31 : 0.34}
+        />
       </group>
     );
   }
   if (terrain === "mountain") {
     return (
-      <group position={[0, 0.35, 0]}>
-        <mesh castShadow position={[-0.18, 0.2, 0]}>
-          <coneGeometry args={[0.42, 0.85, 6]} />
-          <meshStandardMaterial color="#5b6267" roughness={0.88} />
-        </mesh>
-        <mesh castShadow position={[-0.18, 0.5, 0]}>
-          <coneGeometry args={[0.18, 0.25, 6]} />
-          <meshStandardMaterial color="#e9f0ed" roughness={0.72} />
-        </mesh>
-        <mesh castShadow position={[0.24, 0.1, 0.08]}>
-          <coneGeometry args={[0.3, 0.62, 6]} />
-          <meshStandardMaterial color="#7d8588" roughness={0.9} />
-        </mesh>
+      <group position={[0, 0.28, 0]}>
+        <AssetModel name="terrain-mountain" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.98} />
       </group>
     );
   }
   return (
-    <group position={[0, 0.27, 0]}>
-      <mesh castShadow rotation-z={-0.22}>
-        <cylinderGeometry args={[0.05, 0.075, 0.52, 8]} />
-        <meshStandardMaterial color="#775039" />
-      </mesh>
-      {[[-0.16, 0.21, 0], [0.1, 0.29, 0.03], [0.24, 0.18, -0.02]].map((position, index) => (
-        <mesh key={index} castShadow position={position as [number, number, number]} rotation-z={index === 0 ? -0.55 : index === 2 ? 0.55 : 0}>
-          <sphereGeometry args={[0.17, 9, 6]} />
-          <meshStandardMaterial color={index === 1 ? "#217d58" : "#36a468"} roughness={0.78} />
-        </mesh>
-      ))}
-      <mesh castShadow position={[-0.38, -0.16, 0.26]}>
-        <dodecahedronGeometry args={[0.12, 0]} />
-        <meshStandardMaterial color="#d7a95e" roughness={0.9} />
-      </mesh>
+    <group position={[0, 0.2, 0]}>
+      <AssetModel name="terrain-beach" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.98} />
+      {tileVariant(tileId, 4) === 0 && (
+        <AssetModel name="tree-palm" position={[-0.18, 0.08, 0.08]} rotation={[0, 0.6, 0]} scale={0.27} />
+      )}
     </group>
   );
 }
@@ -131,23 +187,45 @@ function Tile({
 }) {
   const [hovered, setHovered] = useState(false);
   const { x, z } = hexToWorld(tile);
-  if (!tile.active) return null;
+  if (!tile.active) {
+    if (!tile.revealedEffect) return null;
+    return (
+      <group
+        position={[x, tile.revealedEffect === "volcano" ? -0.28 : -0.16, z]}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
+      >
+        <AssetModel
+          name={tile.revealedEffect}
+          rotation={[0, tileVariant(tile.id, 8) * Math.PI / 4, 0]}
+          scale={tile.revealedEffect === "volcano" ? 0.88 : 0.82}
+        />
+      </group>
+    );
+  }
 
   if (tile.isRescue) {
     return (
-      <group position={[x, -0.15, z]} onClick={(event) => { event.stopPropagation(); onClick(); }}>
-        <mesh receiveShadow castShadow>
-          <cylinderGeometry args={[1.05, 1.2, 0.5, 6]} />
-          <meshStandardMaterial color={highlighted ? "#f5d96e" : "#d0b45d"} emissive={highlighted ? "#4f3b08" : "#000000"} />
+      <group position={[x, -0.18, z]} onClick={(event) => { event.stopPropagation(); onClick(); }}>
+        <mesh rotation-x={-Math.PI / 2} position-y={0.08}>
+          <circleGeometry args={[1.18, 32]} />
+          <meshBasicMaterial transparent opacity={0} />
         </mesh>
-        <mesh position-y={0.45} castShadow>
-          <cylinderGeometry args={[0.07, 0.09, 0.8, 8]} />
-          <meshStandardMaterial color="#f1eee5" />
-        </mesh>
-        <mesh position={[0.28, 0.64, 0]} rotation-z={-0.18} castShadow>
-          <boxGeometry args={[0.55, 0.32, 0.04]} />
-          <meshStandardMaterial color="#f05d4f" />
-        </mesh>
+        <AssetModel name="rescue-dock" rotation={[0, tileVariant(tile.id, 4) * Math.PI / 2, 0]} scale={0.86} />
+        <AssetModel
+          name="fire-dragon"
+          position={[-0.2, 0.38, -0.34]}
+          rotation={[0, 0.35 + tileVariant(tile.id, 4) * Math.PI / 2, 0]}
+          scale={0.29}
+        />
+        {highlighted && (
+          <mesh rotation-x={-Math.PI / 2} position-y={0.22}>
+            <ringGeometry args={[0.82, 1.02, 32]} />
+            <meshBasicMaterial color="#fff1a8" transparent opacity={0.92} />
+          </mesh>
+        )}
       </group>
     );
   }
@@ -182,7 +260,7 @@ function Tile({
         <cylinderGeometry args={[1.04, 0.92, 0.18, 6]} />
         <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
       </mesh>
-      <TerrainDetails terrain={tile.terrain} />
+      <TerrainDetails terrain={tile.terrain} tileId={tile.id} />
       {(highlighted || selected) && (
         <mesh rotation-x={-Math.PI / 2} position-y={0.28}>
           <ringGeometry args={[0.72, 0.86, 6]} />
@@ -213,37 +291,28 @@ function Explorer({
   const { x, z } = hexToWorld(tile);
   const angle = (index % 8) * (Math.PI / 4);
   const radius = index === 0 ? 0 : 0.42;
+  const raftSeats: Array<[number, number]> = [[-0.28, 0.16], [0.28, 0.16], [0, -0.28]];
+  const raftSeat = raftSeats[index % raftSeats.length];
+  const offsetX = explorer.raftId ? raftSeat[0] : Math.cos(angle) * radius;
+  const offsetZ = explorer.raftId ? raftSeat[1] : Math.sin(angle) * radius;
 
   return (
     <Float speed={selected ? 4 : 1.4} rotationIntensity={0} floatIntensity={selected ? 0.2 : 0.05}>
       <group
-        position={[x + Math.cos(angle) * radius, explorer.raftId ? 0.48 : explorer.swimming ? 0.12 : 0.58, z + Math.sin(angle) * radius]}
+        position={[x + offsetX, explorer.raftId ? 0.23 : explorer.swimming ? -0.04 : 0.38, z + offsetZ]}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
         }}
         scale={selected ? 1.18 : 1}
       >
-        <mesh castShadow position-y={0.12}>
-          <cylinderGeometry args={[0.13, 0.2, 0.4, 10]} />
-          <meshStandardMaterial color={color} roughness={0.55} />
-        </mesh>
-        <mesh castShadow position-y={0.38}>
-          <sphereGeometry args={[0.15, 12, 9]} />
-          <meshStandardMaterial color="#f0c49a" roughness={0.7} />
-        </mesh>
-        <mesh castShadow position={[0, 0.49, 0]}>
-          <cylinderGeometry args={[0.2, 0.15, 0.09, 12]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        <mesh castShadow position={[0.12, 0.17, 0.03]} rotation-z={-0.24}>
-          <boxGeometry args={[0.12, 0.26, 0.12]} />
-          <meshStandardMaterial color="#d59b45" roughness={0.82} />
-        </mesh>
-        <mesh receiveShadow position-y={-0.11}>
-          <cylinderGeometry args={[0.25, 0.28, 0.08, 14]} />
-          <meshStandardMaterial color="#f2ead7" roughness={0.9} />
-        </mesh>
+        <AssetModel name="explorer" color={color} rotation={[0, angle + Math.PI, 0]} scale={0.27} />
+        {selected && (
+          <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+            <ringGeometry args={[0.28, 0.36, 24]} />
+            <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
+          </mesh>
+        )}
       </group>
     </Float>
   );
@@ -273,24 +342,7 @@ function RaftPiece({ raft, space, selected, onClick }: { raft: RaftView; space: 
       scale={selected ? 1.12 : 1}
       onClick={(event) => { event.stopPropagation(); onClick(); }}
     >
-      {[-0.3, -0.1, 0.1, 0.3].map((offset, index) => (
-        <mesh key={offset} position={[offset, 0.08, 0]} rotation-x={Math.PI / 2} castShadow>
-          <cylinderGeometry args={[0.095, 0.11, 1.05, 10]} />
-          <meshStandardMaterial color={index % 2 ? "#a86a34" : "#87502c"} roughness={0.92} />
-        </mesh>
-      ))}
-      {[-0.27, 0.27].map((zOffset) => (
-        <mesh key={zOffset} position={[0, 0.18, zOffset]} castShadow>
-          <boxGeometry args={[0.86, 0.07, 0.08]} />
-          <meshStandardMaterial color="#d09a55" roughness={0.86} />
-        </mesh>
-      ))}
-      {[-0.28, 0.28].map((xOffset) => (
-        <mesh key={xOffset} position={[xOffset, 0.2, 0]}>
-          <torusGeometry args={[0.11, 0.025, 6, 16]} />
-          <meshStandardMaterial color="#e6c47b" roughness={1} />
-        </mesh>
-      ))}
+      <AssetModel name="raft" scale={0.72} />
       {selected && (
         <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
           <ringGeometry args={[0.68, 0.82, 24]} />
@@ -303,54 +355,25 @@ function RaftPiece({ raft, space, selected, onClick }: { raft: RaftView; space: 
 
 function CreaturePiece({ creature, space, selected, onClick }: { creature: CreatureView; space: TileView | WaterSpaceView; selected: boolean; onClick: () => void }) {
   const { x, z } = hexToWorld(space);
-  const color = creature.type === "sea-serpent" ? "#d94f43" : creature.type === "shark" ? "#278f72" : "#3e68a8";
+  const settings = creature.type === "shark"
+    ? { name: "shark", scale: 0.38, y: 0.02, rotation: -0.5 }
+    : creature.type === "sea-serpent"
+      ? { name: "sea-serpent", scale: 0.4, y: 0.02, rotation: 0.35 }
+      : { name: "kaiju", scale: 0.34, y: 0.12, rotation: 0.15 };
   return (
     <Float speed={1.8} floatIntensity={0.12} rotationIntensity={0.08}>
       <group
-        position={[x, creature.type === "kaiju" ? 0.46 : 0.16, z]}
+        position={[x, settings.y, z]}
         scale={selected ? 1.2 : 1}
         onClick={(event) => { event.stopPropagation(); onClick(); }}
       >
-        {creature.type === "shark" ? (
-          <group rotation-y={-0.5}>
-            <mesh castShadow rotation-z={Math.PI / 2}>
-              <coneGeometry args={[0.25, 0.85, 10]} />
-              <meshStandardMaterial color={color} roughness={0.5} />
-            </mesh>
-            <mesh castShadow position={[0, 0.22, 0]} rotation-z={Math.PI}>
-              <coneGeometry args={[0.16, 0.3, 5]} />
-              <meshStandardMaterial color="#146b60" roughness={0.56} />
-            </mesh>
-          </group>
-        ) : creature.type === "sea-serpent" ? (
-          <group>
-            {[-0.3, 0, 0.28].map((offset, index) => (
-              <mesh key={offset} castShadow position={[offset, index === 1 ? 0.18 : 0, 0]}>
-                <sphereGeometry args={[index === 1 ? 0.22 : 0.17, 12, 8]} />
-                <meshStandardMaterial color={index === 1 ? "#ef6b55" : color} roughness={0.52} />
-              </mesh>
-            ))}
-            <mesh castShadow position={[0, 0.42, 0]}>
-              <dodecahedronGeometry args={[0.24, 0]} />
-              <meshStandardMaterial color="#ef6b55" roughness={0.5} />
-            </mesh>
-          </group>
-        ) : (
-          <group>
-            <mesh castShadow>
-              <dodecahedronGeometry args={[0.43, 1]} />
-              <meshStandardMaterial color={color} roughness={0.58} />
-            </mesh>
-            {[-0.24, 0.24].map((offset) => (
-              <mesh key={offset} castShadow position={[offset, 0.38, 0]} rotation-z={offset < 0 ? 0.45 : -0.45}>
-                <coneGeometry args={[0.1, 0.32, 7]} />
-                <meshStandardMaterial color="#d7e8e3" roughness={0.68} />
-              </mesh>
-            ))}
-          </group>
-        )}
+        <AssetModel
+          name={settings.name}
+          rotation={[0, settings.rotation + tileVariant(creature.id, 8) * Math.PI / 4, 0]}
+          scale={settings.scale}
+        />
         {selected && (
-          <mesh rotation-x={-Math.PI / 2} position-y={-0.12}>
+          <mesh rotation-x={-Math.PI / 2} position-y={-0.04}>
             <ringGeometry args={[0.5, 0.64, 28]} />
             <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
           </mesh>
@@ -367,6 +390,26 @@ function PreviewIsland() {
       {coords.map((coord, index) => {
         const terrain: Terrain = index % 7 === 0 ? "mountain" : index % 3 === 0 ? "forest" : "beach";
         return <Tile key={hexKeySafe(coord)} tile={{ ...coord, id: `preview-${index}`, terrain, active: true, sinking: false }} highlighted={false} selected={false} onClick={() => undefined} />;
+      })}
+    </>
+  );
+}
+
+function OceanDecorations({ spaces }: { spaces: WaterSpaceView[] }) {
+  return (
+    <>
+      {spaces.map((space, index) => {
+        const { x, z } = hexToWorld(space);
+        const coral = index % 2 === 0;
+        return (
+          <group key={space.id} position={[x, coral ? -0.42 : -0.18, z]}>
+            <AssetModel
+              name={coral ? "coral-reef" : "floating-debris"}
+              rotation={[0, tileVariant(space.id, 8) * Math.PI / 4, 0]}
+              scale={coral ? 0.58 : 0.62}
+            />
+          </group>
+        );
       })}
     </>
   );
@@ -400,6 +443,17 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   const selectedCreatureSpace = allSpaces.find((space) => space.id === selectedCreature?.locationId);
   const myTurn = room?.currentPlayerId === clientId && role === "player";
   const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
+  const oceanDecorations = useMemo(() => {
+    if (!room) return [];
+    const occupied = new Set([
+      ...room.rafts.map((raft) => raft.locationId),
+      ...room.creatures.map((creature) => creature.locationId),
+      ...room.explorers.flatMap((explorer) => explorer.locationId ? [explorer.locationId] : [])
+    ]);
+    return room.waterSpaces
+      .filter((space) => !occupied.has(space.id) && tileVariant(space.id, 13) === 0)
+      .slice(0, 12);
+  }, [room]);
 
   const moveTargets = useMemo(() => {
     if (!room || !myTurn) return new Set<string>();
@@ -535,6 +589,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
       <directionalLight position={[8, 14, 6]} intensity={2.8} color="#fff4d5" castShadow shadow-mapSize={[2048, 2048]} />
       <hemisphereLight args={["#d9fbf5", "#174336", 1.28]} />
       <Ocean />
+      <OceanDecorations spaces={oceanDecorations} />
       <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color="#bdeff2" position-y={0.1} />
       {room?.tiles.length ? (
         <>

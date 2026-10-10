@@ -50,6 +50,7 @@ export interface TileView extends HexCoord {
   sinking: boolean;
   isRescue?: boolean;
   blocked?: boolean;
+  revealedEffect?: "volcano" | "whirlpool";
 }
 
 export interface ExplorerView {

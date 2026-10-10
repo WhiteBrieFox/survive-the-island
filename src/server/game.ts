@@ -981,7 +981,10 @@ export function publicState(room: GameRoom, viewerId?: string): PublicRoomState 
     code: room.code, phase: room.phase, hostId: room.hostId, revision: room.revision,
     players: room.players.map((player) => ({ ...player, abilities: player.id === viewerId ? player.abilities : [] })),
     spectators: room.spectators,
-    tiles: room.tiles.map(({ effect: _effect, ...tile }) => tile),
+    tiles: room.tiles.map(({ effect, ...tile }) => ({
+      ...tile,
+      revealedEffect: !tile.active && (effect === "volcano" || effect === "whirlpool") ? effect : undefined
+    })),
     waterSpaces: room.waterSpaces,
     explorers: room.explorers.map((explorer) => ({
       ...explorer,
