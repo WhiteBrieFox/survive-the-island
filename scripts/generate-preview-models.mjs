@@ -496,23 +496,43 @@ function createRaft() {
   raft.name = "RaftFloat";
   root.add(raft);
 
-  for (let index = 0; index < 6; index += 1) {
-    const x = (index - 2.5) * 0.22;
-    raft.add(mesh(new THREE.CylinderGeometry(0.1, 0.115, 1.65, 12), index % 2 ? materials.wood : materials.woodLight, `Log_${index}`, [x, 0.12, 0], [Math.PI / 2, 0, 0]));
+  for (let index = 0; index < 7; index += 1) {
+    const x = (index - 3) * 0.23;
+    raft.add(mesh(new THREE.CylinderGeometry(0.105, 0.12, 1.9, 12), index % 2 ? materials.wood : materials.woodLight, `Log_${index}`, [x, 0.12, 0], [Math.PI / 2, 0, 0]));
   }
-  for (const z of [-0.5, 0.5]) {
-    raft.add(mesh(roundedBoxGeometry(1.35, 0.09, 0.1, 0.025), materials.woodLight, `CrossBrace_${z}`, [0, 0.23, z]));
+  for (const z of [-0.62, 0.62]) {
+    raft.add(mesh(roundedBoxGeometry(1.55, 0.09, 0.1, 0.025), materials.woodLight, `CrossBrace_${z}`, [0, 0.23, z]));
   }
-  for (const x of [-0.42, 0.42]) {
-    for (const z of [-0.5, 0.5]) {
+  for (const x of [-0.5, 0.5]) {
+    for (const z of [-0.62, 0.62]) {
       raft.add(mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 16), materials.ropeFiber, `RopeLoop_${x}_${z}`, [x, 0.27, z], [Math.PI / 2, 0, 0]));
     }
   }
-  raft.add(mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.05, 14), materials.sail, "RolledSail", [0, 0.38, -0.47], [0, 0, Math.PI / 2]));
+  raft.add(mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.18, 14), materials.sail, "RolledSail", [0, 0.38, -0.7], [0, 0, Math.PI / 2]));
   for (const side of [-1, 1]) {
-    raft.add(mesh(new THREE.CylinderGeometry(0.032, 0.032, 1.38, 10), materials.woodLight, `PaddleShaft_${side}`, [side * 0.48, 0.34, 0.03], [Math.PI / 2, 0, side * 0.24]));
-    raft.add(mesh(roundedBoxGeometry(0.16, 0.34, 0.045, 0.03), materials.woodLight, `PaddleBlade_${side}`, [side * 0.64, 0.34, -0.61], [Math.PI / 2, 0, side * 0.24]));
+    raft.add(mesh(new THREE.CylinderGeometry(0.032, 0.032, 1.55, 10), materials.woodLight, `PaddleShaft_${side}`, [side * 0.58, 0.34, 0.04], [Math.PI / 2, 0, side * 0.2]));
+    raft.add(mesh(roundedBoxGeometry(0.16, 0.34, 0.045, 0.03), materials.woodLight, `PaddleBlade_${side}`, [side * 0.71, 0.34, -0.7], [Math.PI / 2, 0, side * 0.2]));
   }
+
+  const seatPositions = [
+    [0, 0.31, -0.28],
+    [-0.38, 0.31, 0.38],
+    [0.38, 0.31, 0.38]
+  ];
+  seatPositions.forEach((position, index) => {
+    raft.add(mesh(
+      new THREE.CylinderGeometry(0.2, 0.22, 0.035, 20),
+      materials.ropeFiber,
+      `SeatPad_${index + 1}`,
+      position
+    ));
+    const anchor = new THREE.Group();
+    anchor.name = `Seat_${index + 1}`;
+    anchor.position.set(position[0], position[1] + 0.035, position[2]);
+    anchor.userData.seatIndex = index;
+    anchor.userData.capacity = 1;
+    raft.add(anchor);
+  });
   mergeMeshesByMaterial(raft, "Raft");
 
   const bob = new THREE.AnimationClip("Bob", 2.6, [
@@ -525,6 +545,7 @@ function createRaft() {
   ]);
   root.userData.assetType = "raft";
   root.userData.capacity = 3;
+  root.userData.seatAnchors = ["Seat_1", "Seat_2", "Seat_3"];
   return { root, animations: [bob] };
 }
 

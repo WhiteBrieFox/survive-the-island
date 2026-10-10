@@ -70,7 +70,7 @@
     },
     {
       "file": "raft.glb",
-      "triangles": 3672,
+      "triangles": 3960,
       "meshes": 4,
       "animations": [
         "Bob"

@@ -18,7 +18,7 @@ const assets: Asset[] = [
   { file: "kaiju.glb", label: "巨兽", note: "原创两栖岛屿巨兽，强调厚重、推撞与棋盘可读性，不复刻现有影视角色。" },
   { file: "fire-dragon.glb", label: "终点火龙", note: "原创火山火龙守卫，用作救援终点附近的场景资产。" },
   { file: "sea-serpent.glb", label: "海蛇", note: "红色热带海蛇，带波浪式游动动画和高辨识度背鳍。" },
-  { file: "raft.glb", label: "木筏", note: "可容纳三名探险者的六木结构，包含漂浮动画。" }
+  { file: "raft.glb", label: "木筏", note: "加宽七木结构，内置三个独立乘员锚点；彩色小人仅用于验证容量。" }
 ];
 
 document.querySelector<HTMLDivElement>("#preview-root")!.innerHTML = `
@@ -103,12 +103,37 @@ let mixer: THREE.AnimationMixer | null = null;
 let animationPlaying = true;
 let darkBackground = false;
 
+function addRaftOccupantPreview(root: THREE.Object3D) {
+  const colors = ["#ef6a54", "#f0c34f", "#4f78c7"];
+  for (let index = 0; index < 3; index += 1) {
+    const anchor = root.getObjectByName(`Seat_${index + 1}`);
+    if (!anchor) continue;
+    const occupant = new THREE.Group();
+    occupant.name = `PreviewOccupant_${index + 1}`;
+    occupant.userData.previewOnly = true;
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.09, 0.2, 4, 8),
+      new THREE.MeshStandardMaterial({ color: colors[index], roughness: 0.62 })
+    );
+    body.position.y = 0.2;
+    body.castShadow = true;
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 12, 8),
+      new THREE.MeshStandardMaterial({ color: "#dda06f", roughness: 0.75 })
+    );
+    head.position.y = 0.42;
+    head.castShadow = true;
+    occupant.add(body, head);
+    anchor.add(occupant);
+  }
+}
+
 function updateStats(root: THREE.Object3D, animations: THREE.AnimationClip[], fileSize: number) {
   let triangles = 0;
   let meshes = 0;
   const materialSet = new Set<THREE.Material>();
   root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
+    if (!(object instanceof THREE.Mesh) || object.parent?.userData.previewOnly) return;
     meshes += 1;
     const geometry = object.geometry;
     triangles += geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;
@@ -163,6 +188,7 @@ async function loadAsset(index: number) {
   const displayHeight = size.y * scale;
   model.scale.setScalar(scale);
   model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+  if (asset.file === "raft.glb") addRaftOccupantPreview(model);
   scene.add(model);
 
   const targetY = Math.max(displayHeight * 0.45, 0.5);
@@ -172,7 +198,12 @@ async function loadAsset(index: number) {
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const fitHeightDistance = displayHeight / (2 * Math.tan(verticalFov / 2));
   const fitWidthDistance = displayWidth / (2 * Math.tan(horizontalFov / 2));
-  const distance = Math.max(fitHeightDistance, fitWidthDistance) * (window.innerWidth <= 680 ? 1.48 : 1.28);
+  const isMobile = window.innerWidth <= 680;
+  const fittedDistance = Math.max(fitHeightDistance, fitWidthDistance) * (isMobile ? 1.48 : 1.28);
+  const minimumDistance = horizontalAssets.has(asset.file)
+    ? (isMobile ? 4.8 : 4.1)
+    : (isMobile ? 4.6 : 3.8);
+  const distance = Math.max(fittedDistance, minimumDistance);
   const direction = new THREE.Vector3(0.56, 0.34, 0.76).normalize();
   camera.position.copy(controls.target).add(direction.multiplyScalar(distance));
   controls.update();
