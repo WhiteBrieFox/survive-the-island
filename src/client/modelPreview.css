@@ -1,0 +1,206 @@
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #173331;
+  background: #c7d9cf;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 38%),
+    #c7d9cf;
+}
+
+button {
+  font: inherit;
+}
+
+.preview-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto minmax(520px, 1fr);
+}
+
+.preview-header {
+  min-height: 92px;
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid rgba(20, 65, 60, 0.16);
+  background: rgba(239, 247, 241, 0.82);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #2f756a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+h1 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.header-actions button,
+.asset-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(26, 73, 67, 0.24);
+  border-radius: 6px;
+  color: #173331;
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.header-actions button:hover,
+.asset-tabs button:hover {
+  border-color: #2e887b;
+  background: #fff;
+}
+
+.asset-tabs {
+  padding: 10px 28px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(20, 65, 60, 0.16);
+  background: rgba(224, 237, 229, 0.88);
+}
+
+.asset-tabs button {
+  flex: 0 0 auto;
+}
+
+.asset-tabs button.active {
+  color: #fff;
+  border-color: #17695e;
+  background: #17695e;
+}
+
+.viewer {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+}
+
+#model-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.asset-info {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  width: min(320px, calc(100% - 48px));
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 8px;
+  background: rgba(244, 250, 246, 0.9);
+  box-shadow: 0 14px 32px rgba(21, 59, 55, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.asset-info > strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 18px;
+}
+
+.asset-info > span {
+  display: block;
+  color: #46645f;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.asset-info dl {
+  margin: 14px 0 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.asset-info dl div {
+  min-width: 0;
+}
+
+.asset-info dt {
+  color: #67817c;
+  font-size: 10px;
+}
+
+.asset-info dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #285e57;
+  font-weight: 800;
+  background: rgba(213, 231, 220, 0.5);
+  transition: opacity 160ms ease;
+}
+
+.loading.hidden {
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (max-width: 680px) {
+  .preview-shell {
+    grid-template-rows: auto auto minmax(500px, 1fr);
+  }
+
+  .preview-header {
+    padding: 14px 16px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .asset-tabs {
+    padding: 9px 16px;
+  }
+
+  .asset-info {
+    left: 12px;
+    bottom: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .asset-info dl {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

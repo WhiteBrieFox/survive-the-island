@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-10-10",
+  "status": "preview-only",
+  "integratedIntoGame": false,
+  "sourceReferences": "/art-source/mira",
+  "assets": [
+    {
+      "file": "explorer.glb",
+      "triangles": 6876,
+      "meshes": 11,
+      "animations": [
+        "Idle"
+      ]
+    },
+    {
+      "file": "shark.glb",
+      "triangles": 3780,
+      "meshes": 7,
+      "animations": [
+        "Swim"
+      ]
+    },
+    {
+      "file": "tree-palm.glb",
+      "triangles": 6856,
+      "meshes": 7,
+      "animations": [
+        "Sway"
+      ]
+    },
+    {
+      "file": "tree-coastal.glb",
+      "triangles": 3576,
+      "meshes": 6,
+      "animations": [
+        "Sway"
+      ]
+    },
+    {
+      "file": "tree-jungle.glb",
+      "triangles": 3472,
+      "meshes": 6,
+      "animations": [
+        "Sway"
+      ]
+    }
+  ]
+}

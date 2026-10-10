@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite --host 0.0.0.0\" \"tsx watch src/server/index.ts\"",
+    "generate:models": "node scripts/generate-preview-models.mjs",
     "build": "tsc --noEmit && vite build",
     "start": "NODE_ENV=production tsx src/server/index.ts",
     "test": "vitest run",
