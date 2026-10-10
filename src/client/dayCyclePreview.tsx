@@ -40,17 +40,17 @@ const stages: Stage[] = [
   {
     id: "morning",
     label: "清晨",
-    time: "08:00",
+    time: "07:20",
     phase: "海滩开始下沉",
     track: "/assets/audio/exploration-1.m4a",
     trackLabel: "探索主题 I",
-    sky: "#8fd2d7",
-    fog: "#65bdc7",
-    ocean: "#20a8bd",
-    sun: [-18, 15, 8],
-    sunColor: "#ffe6ad",
-    sunIntensity: 2.5,
-    ambient: 1.25,
+    sky: "#e3a878",
+    fog: "#e9c99c",
+    ocean: "#3a9da7",
+    sun: [-24, 7, 10],
+    sunColor: "#ffbd68",
+    sunIntensity: 3.15,
+    ambient: 0.72,
     activeRank: 0
   },
   {
@@ -60,13 +60,13 @@ const stages: Stage[] = [
     phase: "海滩耗尽，森林开始下沉",
     track: "/assets/audio/exploration-2.m4a",
     trackLabel: "探索主题 II",
-    sky: "#45abc4",
-    fog: "#278da9",
-    ocean: "#118ca9",
-    sun: [4, 28, 2],
-    sunColor: "#fff6d4",
-    sunIntensity: 3.2,
-    ambient: 1.05,
+    sky: "#2aabd0",
+    fog: "#46b5cc",
+    ocean: "#0789ad",
+    sun: [2, 32, -1],
+    sunColor: "#fffdf0",
+    sunIntensity: 3.75,
+    ambient: 1.28,
     activeRank: 1
   },
   {
@@ -263,7 +263,13 @@ function PreviewScene({ stage }: { stage: Stage }) {
         shadow-camera-top={24}
         shadow-camera-bottom={-24}
       />
-      <hemisphereLight args={["#e8ffff", "#18372f", stage.id === "dusk" ? 0.6 : 1.1]} />
+      <hemisphereLight
+        args={[
+          stage.id === "morning" ? "#ffd9a1" : stage.id === "noon" ? "#e9ffff" : "#f0a07b",
+          stage.id === "morning" ? "#315d58" : stage.id === "noon" ? "#1b635b" : "#282f46",
+          stage.id === "morning" ? 0.72 : stage.id === "noon" ? 1.35 : 0.6
+        ]}
+      />
       <group scale={1.32} rotation-y={-0.08}>
         <Ocean color={stage.ocean} />
         <Sparkles count={stage.id === "dusk" ? 110 : 55} scale={[20, 1, 20]} size={1.1} speed={0.18} color="#d8ffff" position-y={0.15} />

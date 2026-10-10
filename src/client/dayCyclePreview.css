@@ -50,6 +50,24 @@ input {
     linear-gradient(90deg, rgba(1, 24, 31, 0.28), transparent 36%, transparent 70%, rgba(2, 23, 30, 0.18));
 }
 
+.cycle-preview.stage-morning::after {
+  background:
+    radial-gradient(circle at 14% 25%, rgba(255, 200, 117, 0.34), transparent 34%),
+    linear-gradient(180deg, rgba(90, 51, 37, 0.12) 0%, transparent 42%, rgba(2, 35, 39, 0.5) 100%);
+}
+
+.cycle-preview.stage-noon::after {
+  background:
+    linear-gradient(180deg, rgba(221, 252, 255, 0.06) 0%, transparent 42%, rgba(0, 43, 59, 0.38) 100%),
+    linear-gradient(90deg, rgba(0, 57, 69, 0.1), transparent 34%, transparent 72%, rgba(0, 58, 75, 0.08));
+}
+
+.cycle-preview.stage-dusk::after {
+  background:
+    radial-gradient(circle at 84% 30%, rgba(255, 147, 80, 0.22), transparent 38%),
+    linear-gradient(180deg, rgba(57, 27, 49, 0.22) 0%, transparent 38%, rgba(1, 18, 28, 0.64) 100%);
+}
+
 .cycle-header,
 .stage-readout,
 .cycle-controls,
