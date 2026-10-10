@@ -101,6 +101,17 @@ export function GameHud({
     });
   };
 
+  const returnToLobby = () => {
+    socket.emit("leaveRoom", (result) => {
+      if (!result.ok) {
+        showNotice(result.error ?? "暂时无法返回大厅");
+        return;
+      }
+      localStorage.removeItem("island-reconnect-token");
+      window.location.href = "/";
+    });
+  };
+
   return (
     <>
       <header className="game-topbar">
@@ -325,7 +336,7 @@ export function GameHud({
           <span className="eyebrow">远征完成</span>
           <h2>{winners.map((winner) => winner.name).join("、")} 获胜</h2>
           <p>最高得分 {winners[0]?.score ?? 0}</p>
-          <button className="secondary-command" onClick={() => window.location.reload()}>
+          <button className="secondary-command" onClick={returnToLobby}>
             <RotateCcw size={18} />
             返回大厅
           </button>
