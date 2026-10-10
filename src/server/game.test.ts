@@ -216,6 +216,33 @@ describe("complete game core", () => {
     expect(room.log.at(-2)).toMatch(/没有可移动的鲨鱼/);
   });
 
+  it("immediately lets a revealed kaiju displace explorers and creatures on its tile", () => {
+    const room = startedRoom();
+    const tile = room.tiles.find((candidate) =>
+      candidate.active &&
+      !candidate.isRescue &&
+      candidate.terrain === "beach" &&
+      room.explorers.some((explorer) => explorer.locationId === candidate.id)
+    )!;
+    const explorer = room.explorers.find((candidate) => candidate.locationId === tile.id)!;
+    room.creatures.push({ id: "existing-shark", type: "shark", locationId: tile.id });
+    tile.effect = "kaiju";
+
+    endTurn(room);
+    sinkChosenTile(room, "host", tile.id);
+
+    expect(room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === tile.id)).toBe(true);
+    expect(room.pendingChoice).toMatchObject({
+      type: "displace",
+      entityId: explorer.id,
+      entityKind: "explorer"
+    });
+    expect(room.displacementQueue).toEqual(expect.arrayContaining([
+      { entityId: explorer.id, entityKind: "explorer" },
+      { entityId: "existing-shark", entityKind: "creature" }
+    ]));
+  });
+
   it("lets AI complete setup and a full turn through normal commands", () => {
     const room = createRoom("ABC123", "host", "船长");
     room.players[0].ready = true;

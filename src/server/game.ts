@@ -395,8 +395,8 @@ function applyEffect(room: GameRoom, playerId: string, tile: GameTile) {
     });
     recordEvent(room, "whirlpool", "漩涡吞噬了周围的一切", playerId, { tileId: tile.id });
   } else if (tile.effect === "shark" || tile.effect === "kaiju") {
-    spawnCreature(room, tile.effect, tile.id);
-    resolveInteractions(room, tile.id);
+    const creature = spawnCreature(room, tile.effect, tile.id);
+    if (hasInteractionTarget(room, creature)) resolveCreatureInteraction(room, creature);
   } else if (tile.effect === "raft") {
     if (room.rafts.length < 12) room.rafts.push({ id: `raft-${randomUUID()}`, locationId: tile.id });
     else {
@@ -428,13 +428,17 @@ function applyEffect(room: GameRoom, playerId: string, tile: GameTile) {
 
 function spawnCreature(room: GameRoom, type: CreatureType, locationId: string) {
   const limit = type === "shark" ? 6 : 2;
-  const same = room.creatures.filter((item) => item.type === type);
   if (type === "kaiju") room.creatures = room.creatures.filter((item) => !(item.type === "kaiju" && item.locationId === locationId));
-  if (same.length >= limit) same[0].locationId = locationId;
-  else room.creatures.push({ id: `${type}-${randomUUID()}`, type, locationId });
+  const same = room.creatures.filter((item) => item.type === type);
+  const creature = same.length >= limit
+    ? same[0]
+    : { id: `${type}-${randomUUID()}`, type, locationId };
+  creature.locationId = locationId;
+  if (!room.creatures.includes(creature)) room.creatures.push(creature);
   recordEvent(room, "creature-spawned", `${creatureName(type)}出现了`, room.currentPlayerId ?? undefined, {
     type, locationId
   });
+  return creature;
 }
 
 export function rollCreatureDie(room: GameRoom, playerId: string) {

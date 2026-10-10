@@ -87,7 +87,6 @@ function AssetModel({
   "tree-coastal",
   "tree-jungle",
   "kaiju",
-  "fire-dragon",
   "sea-serpent",
   "raft",
   "volcano",
@@ -214,12 +213,6 @@ function Tile({
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
         <AssetModel name="rescue-dock" rotation={[0, tileVariant(tile.id, 4) * Math.PI / 2, 0]} scale={0.86} />
-        <AssetModel
-          name="fire-dragon"
-          position={[-0.2, 0.38, -0.34]}
-          rotation={[0, 0.35 + tileVariant(tile.id, 4) * Math.PI / 2, 0]}
-          scale={0.29}
-        />
         {highlighted && (
           <mesh rotation-x={-Math.PI / 2} position-y={0.22}>
             <ringGeometry args={[0.82, 1.02, 32]} />
