@@ -944,20 +944,186 @@ button:disabled {
   padding: 14px;
 }
 
-.event-list {
-  display: grid;
-  gap: 8px;
+.event-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
 }
 
-.event-list p {
+.event-panel > header button {
+  padding: 3px 0;
+  color: #276f6c;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.event-list {
+  display: grid;
+  gap: 3px;
+}
+
+.event-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 6px;
   color: #536b70;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(89, 112, 114, 0.16);
+  cursor: pointer;
   font-size: 11px;
   line-height: 1.45;
 }
 
-.event-list p:first-child {
+.event-list button:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.event-list button:first-child {
   color: var(--ink);
   font-weight: 700;
+}
+
+.event-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-list button small {
+  color: #278077;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.mobile-log-button {
+  display: none;
+}
+
+.log-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 24, 30, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.log-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(860px, calc(100vw - 32px));
+  height: min(620px, calc(100vh - 48px));
+  overflow: hidden;
+  color: var(--ink);
+  background: #eef1e8;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 8px;
+  box-shadow: 0 28px 90px rgba(0, 15, 20, 0.48);
+}
+
+.log-dialog > header {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 12px 22px;
+  color: white;
+  background: #0b5259;
+}
+
+.log-dialog h2 {
+  margin: 3px 0 0;
+  font-size: 22px;
+}
+
+.log-dialog > header .icon-button {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.log-layout {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(250px, 0.9fr) minmax(0, 1.5fr);
+}
+
+.log-history {
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+  background: #dce5dc;
+  border-right: 1px solid #c3d0c6;
+}
+
+.log-history button {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  padding: 10px 11px;
+  color: #49666a;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #c6d3c9;
+  cursor: pointer;
+}
+
+.log-history button.active {
+  color: white;
+  background: #247c74;
+  border-bottom-color: transparent;
+}
+
+.log-history button span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.log-history button small {
+  color: inherit;
+  font-size: 10px;
+  opacity: 0.72;
+}
+
+.log-detail {
+  align-self: start;
+  padding: 34px;
+}
+
+.log-detail > span {
+  color: #278077;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.log-detail h3 {
+  margin: 8px 0 16px;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.log-detail p {
+  color: #4f696d;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.log-detail time {
+  display: block;
+  margin-top: 24px;
+  color: #819391;
+  font-size: 11px;
 }
 
 .turn-actions {
@@ -1397,6 +1563,48 @@ button:disabled {
 
   .event-panel {
     display: none;
+  }
+
+  .mobile-log-button {
+    position: absolute;
+    z-index: 8;
+    right: 8px;
+    bottom: 76px;
+    display: grid;
+    color: #f4efe0;
+    background: rgba(8, 47, 57, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .log-backdrop {
+    padding: 0;
+  }
+
+  .log-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .log-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(150px, 42vh) minmax(0, 1fr);
+  }
+
+  .log-history {
+    border-right: 0;
+    border-bottom: 1px solid #c3d0c6;
+  }
+
+  .log-detail {
+    padding: 22px 18px;
+    overflow: auto;
+  }
+
+  .log-detail h3 {
+    font-size: 20px;
   }
 
   .turn-actions {

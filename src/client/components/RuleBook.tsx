@@ -115,13 +115,13 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
               </article>
               <article className="creature-rule serpent-rule">
                 <div className="creature-rule-art">海蛇</div>
-                <div><h3>海蛇 · 最多移动 1 格</h3><p>只能在水域行动。进入有单位的格子时，摧毁木筏并使该格全部探险者失踪，是最危险的海洋生物。</p></div>
+                <div><h3>海蛇 · 最多移动 1 格</h3><p>只能在水域行动。进入有单位的格子时，摧毁木筏并使该格全部探险者失踪。海蛇攻击无法使用驱逐剂，是最危险的海洋生物。</p></div>
               </article>
               <article className="creature-rule kaiju-rule">
                 <div className="creature-rule-art">巨兽</div>
                 <div><h3>巨兽 · 最多移动 2 格</h3><p>可以踏上陆地或进入水域，会摧毁同格木筏并推走其他单位。被推上有空位的木筏会直接登船；被推到鲨鱼或海蛇所在格会立即结算攻击。骰子移动时由掷骰者选择推离方向，翻格出现时随机推离。</p></div>
               </article>
-              <div className="rule-callout"><Shield size={20} /><span>驱逐剂可在攻击响应窗口移除攻击者，并保护该格全部单位。若对应生物没有合法移动目标，系统会自动跳过。</span></div>
+              <div className="rule-callout"><Shield size={20} /><span>驱逐剂只可响应鲨鱼或巨兽攻击，移除攻击者并保护该格单位；海蛇攻击不会出现驱逐剂响应窗口。若对应生物没有合法移动目标，系统会自动跳过。</span></div>
             </div>
           )}
 
@@ -137,7 +137,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
                 <article><strong>海豚</strong><p>将你的一名落水者移动最多 2 格，但不能直接送上救援岛。</p></article>
                 <article><strong>潜水</strong><p>把任意一只海洋生物移动到一个没有生物的水域。</p></article>
                 <article><strong>生物骰</strong><p>在行动阶段额外掷一次生物骰，完成生物移动后继续原行动阶段。</p></article>
-                <article><strong>驱逐剂</strong><p>仅在受到生物攻击时使用，移除攻击者并取消本次攻击。</p></article>
+                <article><strong>驱逐剂</strong><p>仅在鲨鱼或巨兽攻击时使用，移除攻击者并取消本次攻击；不能驱逐海蛇。</p></article>
                 <article><strong>火山与漩涡</strong><p>火山累计至 3 座会结束游戏；漩涡会吞噬所在格的单位。</p></article>
               </div>
             </div>

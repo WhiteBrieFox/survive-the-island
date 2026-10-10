@@ -394,6 +394,32 @@ describe("complete game core", () => {
     expect(room.log.some((entry) => entry.includes("海蛇摧毁了"))).toBe(true);
   });
 
+  it("does not allow repellent to stop a sea serpent attack", () => {
+    const room = startedRoom();
+    const target = room.waterSpaces.find((space) =>
+      room.waterSpaces.some((source) => areAdjacent(source, space))
+    )!;
+    const source = room.waterSpaces.find((space) => areAdjacent(space, target))!;
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "guest")!;
+    victim.locationId = victim.tileId = target.id;
+    victim.raftId = null;
+    victim.swimming = true;
+    room.players.find((player) => player.id === "guest")!.abilities.push("repellent");
+    room.creatures.push({ id: "test-serpent", type: "sea-serpent", locationId: source.id });
+    room.turnPhase = "creature-move";
+    room.creatureRoll = "sea-serpent";
+    room.creatureMovesRemaining = 1;
+    room.creatureMoved = false;
+    room.resumePhase = "creature";
+    room.pendingChoice = { type: "move-creature", creatureType: "sea-serpent", stepsRemaining: 1, canFinish: false };
+
+    moveCreature(room, "host", "test-serpent", target.id);
+
+    expect(victim.lost).toBe(true);
+    expect(room.players.find((player) => player.id === "guest")!.abilities).toContain("repellent");
+    expect(room.pendingChoice?.type).not.toBe("repellent");
+  });
+
   it("resumes a kaiju displacement queue after a repellent response", () => {
     const room = startedRoom();
     const victim = room.explorers.find((explorer) => explorer.ownerId === "guest")!;
@@ -474,6 +500,22 @@ describe("complete game core", () => {
     expect(hostView.events.every((event) => event.payload === undefined)).toBe(true);
     placeExplorer(room, "host", room.tiles.find((tile) => !tile.isRescue)!.id);
     expect(publicState(room, "guest").log.at(-1)).not.toMatch(/\d/);
+  });
+
+  it("provides detailed public event descriptions without exposing private payloads", () => {
+    const room = startedRoom();
+    const explorer = room.explorers.find((item) => item.ownerId === "host" && item.locationId)!;
+    const source = room.tiles.find((tile) => tile.id === explorer.locationId)!;
+    const target = room.tiles.find((tile) => tile.active && !tile.isRescue && areAdjacent(source, tile))!;
+
+    moveExplorer(room, "host", explorer.id, target.id);
+
+    const event = publicState(room, "guest").events.at(-1)!;
+    expect(event.payload).toBeUndefined();
+    expect(event.detail).toContain("船长的第");
+    expect(event.detail).toContain(`[${source.q}, ${source.r}]`);
+    expect(event.detail).toContain(`[${target.q}, ${target.r}]`);
+    expect(event.detail).not.toContain("value");
   });
 
   it("keeps a drawn ability type private", () => {

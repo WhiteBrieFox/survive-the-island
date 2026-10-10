@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ContactShadows, Float, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Color, Group, Mesh, Vector3, type Material, type Object3D } from "three";
+import {
+  BufferGeometry, Color, Float32BufferAttribute, Group, LineSegments,
+  Mesh, MeshBasicMaterial, Vector3, type Material, type Object3D
+} from "three";
 import { useShallow } from "zustand/react/shallow";
 import type { CreatureView, ExplorerView, PlayerColor, PublicRoomState, RaftView, Terrain, TileView, WaterSpaceView } from "../../shared/types";
 import { areAdjacent, createIslandCoords, hexToWorld } from "../../shared/hex";
@@ -244,21 +247,150 @@ function TerrainDetails({ terrain, tileId }: { terrain: Terrain; tileId: string 
   );
 }
 
+const SINK_DURATION = 1.72;
+
+function RouteGrid({ spaces, tiles }: { spaces: Array<TileView | WaterSpaceView>; tiles: TileView[] }) {
+  const lines = useRef<LineSegments>(null);
+  const geometry = useMemo(() => {
+    const positions: number[] = [];
+    for (const space of spaces) {
+      const { x, z } = hexToWorld(space);
+      const tile = tiles.find((candidate) => candidate.id === space.id);
+      const y = tile?.active
+        ? tile.isRescue ? 0.04 : tile.terrain === "mountain" ? 0.37 : 0.23
+        : -0.37;
+      const corners = Array.from({ length: 6 }, (_, index) => {
+        const angle = Math.PI / 6 + index * Math.PI / 3;
+        return [x + Math.cos(angle) * 1.04, y, z + Math.sin(angle) * 1.04] as const;
+      });
+      corners.forEach((corner, index) => {
+        const next = corners[(index + 1) % corners.length];
+        positions.push(...corner, ...next);
+      });
+    }
+    const result = new BufferGeometry();
+    result.setAttribute("position", new Float32BufferAttribute(positions, 3));
+    return result;
+  }, [spaces, tiles]);
+
+  useLayoutEffect(() => {
+    lines.current?.computeLineDistances();
+    return () => geometry.dispose();
+  }, [geometry]);
+
+  return (
+    <lineSegments ref={lines} geometry={geometry} renderOrder={1}>
+      <lineDashedMaterial
+        color="#d9f3e8"
+        dashSize={0.15}
+        gapSize={0.13}
+        transparent
+        opacity={0.28}
+        depthWrite={false}
+      />
+    </lineSegments>
+  );
+}
+
+function SinkingTile({ tile }: { tile: TileView }) {
+  const tileGroup = useRef<Group>(null);
+  const markerGroup = useRef<Group>(null);
+  const splashGroup = useRef<Group>(null);
+  const markerMaterial = useRef<MeshBasicMaterial>(null);
+  const splashMaterials = useRef<Array<MeshBasicMaterial | null>>([]);
+  const elapsed = useRef(0);
+  const { x, z } = hexToWorld(tile);
+  const baseY = tile.terrain === "mountain" ? 0.1 : 0;
+
+  useFrame((_, delta) => {
+    elapsed.current = Math.min(SINK_DURATION, elapsed.current + delta);
+    const progress = elapsed.current / SINK_DURATION;
+    const anticipation = Math.min(1, progress / 0.2);
+    const flipProgress = Math.max(0, Math.min(1, (progress - 0.16) / 0.48));
+    const flipEase = flipProgress * flipProgress * (3 - 2 * flipProgress);
+    const sinkProgress = Math.max(0, Math.min(1, (progress - 0.56) / 0.44));
+    const sinkEase = sinkProgress * sinkProgress;
+
+    if (tileGroup.current) {
+      tileGroup.current.position.y = baseY + Math.sin(anticipation * Math.PI) * 0.2 - sinkEase * 1.5;
+      tileGroup.current.rotation.x = flipEase * Math.PI * 0.94;
+      tileGroup.current.rotation.y = Math.sin(progress * Math.PI * 4) * 0.035;
+      tileGroup.current.scale.setScalar(1 - sinkEase * 0.16);
+    }
+    if (markerGroup.current) {
+      markerGroup.current.scale.setScalar(1 + Math.sin(elapsed.current * 11) * 0.09);
+      markerGroup.current.visible = progress < 0.58;
+    }
+    if (markerMaterial.current) markerMaterial.current.opacity = Math.max(0, 0.95 - progress * 1.45);
+    if (splashGroup.current) {
+      const splashProgress = Math.max(0, Math.min(1, (progress - 0.48) / 0.44));
+      splashGroup.current.visible = splashProgress > 0;
+      splashGroup.current.scale.setScalar(0.45 + splashProgress * 1.35);
+      splashMaterials.current.forEach((material, index) => {
+        if (material) material.opacity = Math.max(0, (0.72 - index * 0.14) * (1 - splashProgress));
+      });
+    }
+  });
+
+  return (
+    <group position={[x, 0, z]}>
+      <group ref={tileGroup} position-y={baseY}>
+        <mesh castShadow receiveShadow>
+          <cylinderGeometry args={[1.09, 1.12, tile.terrain === "mountain" ? 0.5 : 0.38, 6]} />
+          <meshStandardMaterial
+            color={terrainColor[tile.terrain]}
+            roughness={0.82}
+            emissive="#8b6515"
+            emissiveIntensity={0.38}
+          />
+        </mesh>
+        <mesh position-y={tile.terrain === "mountain" ? -0.25 : -0.19} receiveShadow>
+          <cylinderGeometry args={[1.12, 1.02, 0.18, 6]} />
+          <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
+        </mesh>
+        <TerrainDetails terrain={tile.terrain} tileId={tile.id} />
+      </group>
+      <group ref={markerGroup} position-y={0.62} rotation-x={-Math.PI / 2}>
+        <mesh>
+          <ringGeometry args={[0.82, 1.08, 6]} />
+          <meshBasicMaterial ref={markerMaterial} color="#ffe48a" transparent opacity={0.95} depthWrite={false} />
+        </mesh>
+      </group>
+      <group ref={splashGroup} position-y={-0.37} rotation-x={-Math.PI / 2} visible={false}>
+        {[0.62, 0.82, 1.02].map((radius, index) => (
+          <mesh key={radius} position-z={index * 0.006}>
+            <ringGeometry args={[radius, radius + 0.075, 48]} />
+            <meshBasicMaterial
+              ref={(material) => { splashMaterials.current[index] = material; }}
+              color={index === 0 ? "#e4ffff" : "#8de7e5"}
+              transparent
+              opacity={0}
+              depthWrite={false}
+            />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
 function Tile({
   tile,
   highlighted,
   selected,
+  suppressReveal,
   onClick
 }: {
   tile: TileView;
   highlighted: boolean;
   selected: boolean;
+  suppressReveal?: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const { x, z } = hexToWorld(tile);
   if (!tile.active) {
-    if (!tile.revealedEffect) return null;
+    if (!tile.revealedEffect || suppressReveal) return null;
     return (
       <group
         position={[x, tile.revealedEffect === "volcano" ? -0.28 : -0.16, z]}
@@ -600,6 +732,52 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   const selectedCreatureSpace = allSpaces.find((space) => space.id === selectedCreature?.locationId);
   const myTurn = room?.currentPlayerId === clientId && role === "player";
   const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
+  const previousTiles = useRef<Map<string, TileView> | null>(null);
+  const sinkTimers = useRef(new Map<string, number>());
+  const [sinkingTiles, setSinkingTiles] = useState<TileView[]>([]);
+  const [sinkRequestPending, setSinkRequestPending] = useState(false);
+
+  useEffect(() => {
+    if (!room) {
+      previousTiles.current = null;
+      setSinkingTiles([]);
+      setSinkRequestPending(false);
+      return;
+    }
+    const nextTiles = new Map(room.tiles.map((tile) => [tile.id, tile]));
+    const previous = previousTiles.current;
+    if (previous) {
+      const newlySunk = room.tiles
+        .filter((tile) => !tile.active && previous.get(tile.id)?.active)
+        .map((tile) => previous.get(tile.id)!)
+        .filter((tile) => !tile.isRescue);
+      if (newlySunk.length) {
+        setSinkRequestPending(false);
+        setSinkingTiles((current) => [
+          ...current.filter((tile) => !newlySunk.some((next) => next.id === tile.id)),
+          ...newlySunk
+        ]);
+        newlySunk.forEach((tile) => {
+          const existing = sinkTimers.current.get(tile.id);
+          if (existing) window.clearTimeout(existing);
+          const timer = window.setTimeout(() => {
+            sinkTimers.current.delete(tile.id);
+            setSinkingTiles((current) => current.filter((item) => item.id !== tile.id));
+          }, SINK_DURATION * 1000);
+          sinkTimers.current.set(tile.id, timer);
+        });
+      }
+    }
+    previousTiles.current = nextTiles;
+  }, [room]);
+
+  useEffect(() => () => {
+    sinkTimers.current.forEach((timer) => window.clearTimeout(timer));
+    sinkTimers.current.clear();
+  }, []);
+
+  const sinkingTileIds = useMemo(() => new Set(sinkingTiles.map((tile) => tile.id)), [sinkingTiles]);
+  const sinkAnimationLocked = sinkRequestPending || sinkingTiles.length > 0;
   const unitPlacements = useMemo(() => {
     const placements = new Map<string, UnitPlacement>();
     if (!room) return placements;
@@ -719,8 +897,16 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
       return;
     }
     if (sinkTargets.has(tile.id)) {
+      if (sinkAnimationLocked) {
+        showNotice("等待当前地块完成下沉");
+        return;
+      }
+      setSinkRequestPending(true);
       socket.emit("sinkTile", tile.id, (result) => {
-        if (!result.ok) showNotice(result.error ?? "无法翻开这个格子");
+        if (!result.ok) {
+          setSinkRequestPending(false);
+          showNotice(result.error ?? "无法翻开这个格子");
+        }
       });
       return;
     }
@@ -790,6 +976,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
       <group scale={BOARD_SCALE}>
         <Ocean />
         <OceanDecorations spaces={oceanDecorations} />
+        {room && <RouteGrid spaces={allSpaces} tiles={room.tiles} />}
         <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color="#bdeff2" position-y={0.1} />
         {room?.tiles.length ? (
           <>
@@ -799,9 +986,11 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                 tile={tile}
                 highlighted={moveTargets.has(tile.id) || sinkTargets.has(tile.id)}
                 selected={selectedTile?.id === tile.id}
+                suppressReveal={sinkingTileIds.has(tile.id)}
                 onClick={() => handleTileClick(tile)}
               />
             ))}
+            {sinkingTiles.map((tile) => <SinkingTile key={`sinking-${tile.id}`} tile={tile} />)}
             {room.waterSpaces.map((space) => (
               <WaterTarget key={space.id} space={space} highlighted={moveTargets.has(space.id)} onClick={() => handleTarget(space.id)} />
             ))}

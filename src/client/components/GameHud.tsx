@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen, Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
-  LogOut, Navigation, RotateCcw, Shield, Users, Waves
+  LogOut, Navigation, RotateCcw, ScrollText, Shield, Users, Waves, X
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { AbilityType, PublicRoomState, Role } from "../../shared/types";
@@ -31,7 +31,16 @@ export function GameHud({
     showNotice: state.showNotice
   })));
   const [boardingIds, setBoardingIds] = useState<string[]>([]);
+  const [logOpen, setLogOpen] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const boardingChoice = room.pendingChoice?.type === "board-raft" ? room.pendingChoice : null;
+  const recentEvents = room.events.slice(-5).reverse();
+  const selectedEvent = room.events.find((event) => event.id === selectedEventId) ?? room.events.at(-1);
+
+  const openLog = (eventId?: number) => {
+    setSelectedEventId(eventId ?? room.events.at(-1)?.id ?? null);
+    setLogOpen(true);
+  };
 
   useEffect(() => {
     setBoardingIds([]);
@@ -67,7 +76,7 @@ export function GameHud({
     dolphin: { description: "将一名游泳者移动最多 2 格。", hint: "选牌后选择游泳者与目标格", icon: Fish },
     dive: { description: "将任意一只海洋生物移至空水域。", hint: "选牌后选择生物与目标水域", icon: Waves },
     "creature-die": { description: "重新掷一次本回合的生物骰。", hint: "点击立即使用", icon: Dices },
-    repellent: { description: "受到生物攻击时移除攻击者并保护同格单位。", hint: "攻击响应阶段使用", icon: Shield }
+    repellent: { description: "仅能阻止鲨鱼或巨兽攻击；海蛇无法被驱逐。", hint: "鲨鱼或巨兽攻击响应时使用", icon: Shield }
   };
   const abilityGroups = me?.abilities.reduce<Array<{ ability: AbilityType; count: number }>>((groups, ability) => {
     const existing = groups.find((group) => group.ability === ability);
@@ -82,7 +91,7 @@ export function GameHud({
       socket.emit("useAbility", { ability }, (result) => !result.ok && showNotice(result.error ?? "能力使用失败"));
       return;
     }
-    if (ability === "repellent") return showNotice("驱逐剂会在受到攻击时自动出现响应按钮");
+    if (ability === "repellent") return showNotice("驱逐剂仅在鲨鱼或巨兽攻击时出现响应按钮，无法驱逐海蛇");
     setActiveAbility(activeAbility === ability ? null : ability);
   };
 
@@ -161,11 +170,67 @@ export function GameHud({
       </aside>
 
       <aside className="event-panel">
-        <span className="eyebrow">航海日志</span>
+        <header>
+          <span className="eyebrow">航海日志</span>
+          <button type="button" onClick={() => openLog()}>查看全部</button>
+        </header>
         <div className="event-list">
-          {room.log.slice(-5).reverse().map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>)}
+          {recentEvents.map((event) => (
+            <button type="button" key={event.id} onClick={() => openLog(event.id)}>
+              <span>{event.message}</span>
+              <small>详情</small>
+            </button>
+          ))}
         </div>
       </aside>
+      <button className="mobile-log-button icon-button" type="button" title="查看航海日志" onClick={() => openLog()}>
+        <ScrollText size={18} />
+      </button>
+
+      {logOpen && (
+        <div className="log-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setLogOpen(false);
+        }}>
+          <section className="log-dialog" role="dialog" aria-modal="true" aria-labelledby="log-title">
+            <header>
+              <div>
+                <span className="eyebrow">完整事件记录</span>
+                <h2 id="log-title">航海日志</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label="关闭日志" title="关闭日志" onClick={() => setLogOpen(false)}>
+                <X size={20} />
+              </button>
+            </header>
+            <div className="log-layout">
+              <div className="log-history">
+                {[...room.events].reverse().map((event) => (
+                  <button
+                    type="button"
+                    key={event.id}
+                    className={event.id === selectedEvent?.id ? "active" : ""}
+                    onClick={() => setSelectedEventId(event.id)}
+                  >
+                    <span>{event.message}</span>
+                    <small>{new Date(event.at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small>
+                  </button>
+                ))}
+              </div>
+              <article className="log-detail">
+                {selectedEvent ? (
+                  <>
+                    <span>事件 #{selectedEvent.id}</span>
+                    <h3>{selectedEvent.message}</h3>
+                    <p>{selectedEvent.detail ?? selectedEvent.message}</p>
+                    <time>{new Date(selectedEvent.at).toLocaleString("zh-CN")}</time>
+                  </>
+                ) : (
+                  <p>还没有可查看的事件。</p>
+                )}
+              </article>
+            </div>
+          </section>
+        </div>
+      )}
 
       {myTurn && room.phase === "playing" && room.turnPhase === "action" && (
         <div className="turn-actions">
@@ -248,8 +313,8 @@ export function GameHud({
 
       {canRespondRepellent && (
         <div className="response-panel">
-          <strong>生物即将攻击你的探险者</strong>
-          <span>使用驱逐剂可移除这只生物，并保护该格全部单位。</span>
+          <strong>鲨鱼或巨兽即将攻击你的探险者</strong>
+          <span>使用驱逐剂可移除攻击者并保护该格单位；海蛇攻击无法使用驱逐剂。</span>
           <div>
             <button
               className="primary-command"

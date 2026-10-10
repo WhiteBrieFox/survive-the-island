@@ -354,6 +354,7 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
   const targetStable = Boolean(destinationRaft || targetTile?.active);
   const swims = !sourceStable || !targetStable;
   if (swims && explorer.swamThisTurn) throw new Error("这名探险者本回合已经游过一次");
+  const sourceId = explorer.locationId;
   explorer.locationId = targetId;
   explorer.tileId = targetId;
   explorer.raftId = destinationRaft?.id ?? null;
@@ -368,11 +369,11 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
     player.score += explorer.value;
     player.rescued += 1;
     recordEvent(room, "explorer-rescued", `${player.name} 救出探险者，获得 ${explorer.value} 分`, playerId, {
-      explorerId, value: explorer.value
+      explorerId, sourceId, targetId, value: explorer.value
     });
   } else {
     recordEvent(room, swims ? "swimmer-moved" : "explorer-moved", `${player.name} 移动了一名探险者`, playerId, {
-      explorerId, targetId
+      explorerId, sourceId, targetId
     });
     resolveInteractions(room, targetId);
   }
@@ -389,12 +390,13 @@ export function moveRaft(room: GameRoom, playerId: string, raftId: string, targe
   if (!raft || !controlsRaft(room, playerId, raft)) throw new Error("你不能控制这艘木筏");
   if (!from || !to || !areAdjacent(from, to) || !isWater(room, targetId) || raftAt(room, targetId)) throw new Error("木筏目标不合法");
   if (room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) throw new Error("巨兽阻挡了目标");
-  const route = raftRoute(room, raft.locationId, targetId, 1);
+  const sourceId = raft.locationId;
+  const route = raftRoute(room, sourceId, targetId, 1);
   const boardedExplorerIds = sailRaft(room, raft, route);
   if (!free) room.actionsLeft -= 1;
   resolveInteractions(room, targetId);
   recordEvent(room, "raft-moved", boardedExplorerIds.length ? `木筏移动并救起 ${boardedExplorerIds.length} 名落水者` : "木筏移动了", playerId, {
-    raftId, targetId, free, route, boardedExplorerIds
+    raftId, sourceId, targetId, free, route, boardedExplorerIds
   });
   bump(room);
 }
@@ -543,11 +545,12 @@ export function moveCreature(room: GameRoom, playerId: string, creatureId: strin
   if (creature.type === "kaiju" && room.creatures.some((item) => item.id !== creature.id && item.type === "kaiju" && item.locationId === targetId)) {
     throw new Error("巨兽不能进入另一只巨兽所在格");
   }
+  const sourceId = creature.locationId;
   creature.locationId = targetId;
   room.creatureMovesRemaining -= 1;
   room.creatureMoved = true;
   recordEvent(room, "creature-moved", `${creatureName(creature.type)}移动了`, playerId, {
-    creatureId, targetId, stepsRemaining: room.creatureMovesRemaining
+    creatureId, sourceId, targetId, stepsRemaining: room.creatureMovesRemaining
   });
   if (hasInteractionTarget(room, creature)) {
     room.interactionContinuation = "finish-creature";
@@ -635,9 +638,13 @@ function resolveCreatureInteraction(
 ) {
   room.displacementMode = displacementMode;
   if (creature.type === "sea-serpent") {
+    const affectedExplorerIds = room.explorers
+      .filter((item) => item.locationId === creature.locationId && !item.lost && !item.rescued)
+      .map((item) => item.id);
+    const destroyedRaftId = raftAt(room, creature.locationId)?.id;
     eliminateAt(room, creature.locationId, true, true);
     recordEvent(room, "sea-serpent-attack", "海蛇摧毁了该格的木筏和探险者", room.currentPlayerId ?? undefined, {
-      creatureId: creature.id, locationId: creature.locationId
+      creatureId: creature.id, locationId: creature.locationId, affectedExplorerIds, destroyedRaftId
     });
     completeInteraction(room);
     return;
@@ -699,15 +706,16 @@ export function respondRepellent(room: GameRoom, playerId: string, use: boolean)
 function applyCreatureAttack(room: GameRoom, creature: CreatureView) {
   room.pendingChoice = null;
   if (creature.type === "shark") {
-    room.explorers.filter((item) => item.locationId === creature.locationId && item.swimming)
-      .forEach((item) => eliminateExplorer(room, item));
+    const affected = room.explorers.filter((item) => item.locationId === creature.locationId && item.swimming);
+    affected.forEach((item) => eliminateExplorer(room, item));
     recordEvent(room, "shark-attack", "鲨鱼消灭了该格的游泳者", room.currentPlayerId ?? undefined, {
-      creatureId: creature.id, locationId: creature.locationId
+      creatureId: creature.id, locationId: creature.locationId, affectedExplorerIds: affected.map((item) => item.id)
     });
     completeInteraction(room);
     return;
   }
   const raft = raftAt(room, creature.locationId);
+  const destroyedRaftId = raft?.id;
   if (raft) destroyRaft(room, raft);
   room.postDisplacementContinuation = room.interactionContinuation === "finish-creature"
     ? "finish-creature"
@@ -722,7 +730,7 @@ function applyCreatureAttack(room: GameRoom, creature: CreatureView) {
       .map((item): Displacement => ({ entityId: item.id, entityKind: "creature" }))
   ];
   recordEvent(room, "kaiju-attack", "巨兽摧毁木筏并开始推离同格单位", room.currentPlayerId ?? undefined, {
-    creatureId: creature.id, locationId: creature.locationId, displacementMode: room.displacementMode
+    creatureId: creature.id, locationId: creature.locationId, displacementMode: room.displacementMode, destroyedRaftId
   });
   processNextDisplacement(room);
 }
@@ -781,9 +789,11 @@ function processNextDisplacement(room: GameRoom) {
 
 function moveDisplacedEntity(room: GameRoom, displacement: Displacement, targetId: string) {
   let interactionStarted = false;
+  let sourceId: string | null = null;
   if (displacement.entityKind === "explorer") {
     const explorer = room.explorers.find((item) => item.id === displacement.entityId);
     if (explorer) {
+      sourceId = explorer.locationId;
       explorer.locationId = explorer.tileId = targetId;
       const raft = raftAt(room, targetId);
       explorer.raftId = raft && occupants(room, raft.id).length < 3 ? raft.id : null;
@@ -796,10 +806,13 @@ function moveDisplacedEntity(room: GameRoom, displacement: Displacement, targetI
     }
   } else {
     const creature = room.creatures.find((item) => item.id === displacement.entityId);
-    if (creature) creature.locationId = targetId;
+    if (creature) {
+      sourceId = creature.locationId;
+      creature.locationId = targetId;
+    }
   }
   recordEvent(room, "unit-displaced", "巨兽推离了一个单位", room.currentPlayerId ?? undefined, {
-    ...displacement, targetId, random: room.displacementMode === "random"
+    ...displacement, sourceId, targetId, random: room.displacementMode === "random"
   });
   return interactionStarted;
 }
@@ -1099,8 +1112,140 @@ export function publicState(room: GameRoom, viewerId?: string): PublicRoomState 
     currentPlayerId: room.currentPlayerId, turnPhase: room.turnPhase, creatureRoll: room.creatureRoll,
     pendingChoice: room.pendingChoice, actionsLeft: room.actionsLeft, round: room.round,
     volcanoes: room.volcanoes, maxVolcanoes: room.maxVolcanoes, log: room.log.slice(-16),
-    events: room.events.slice(-60).map(({ payload: _payload, ...event }) => event), winnerIds: room.winnerIds
+    events: room.events.slice(-60).map(({ payload, ...event }) => ({
+      ...event,
+      detail: publicEventDetail(room, event, payload)
+    })), winnerIds: room.winnerIds
   };
+}
+
+function publicEventDetail(
+  room: GameRoom,
+  event: Omit<GameEventView, "payload">,
+  payload?: Record<string, unknown>
+) {
+  const actor = room.players.find((player) => player.id === event.actorId)?.name ?? "系统";
+  const stringValue = (key: string) => typeof payload?.[key] === "string" ? payload[key] as string : undefined;
+  const stringValues = (key: string) => Array.isArray(payload?.[key])
+    ? (payload[key] as unknown[]).filter((value): value is string => typeof value === "string")
+    : [];
+  const spaceName = (id?: string) => {
+    if (!id) return "未知位置";
+    const tile = room.tiles.find((item) => item.id === id);
+    const water = room.waterSpaces.find((item) => item.id === id);
+    const space = tile ?? water;
+    if (!space) return "未知位置";
+    const coordinates = `[${space.q}, ${space.r}]`;
+    if (!tile) return `水域 ${coordinates}`;
+    if (tile.isRescue) return `救援岛 ${coordinates}`;
+    const terrain = tile.terrain === "beach" ? "海滩" : tile.terrain === "forest" ? "森林" : "山地";
+    return `${tile.active ? terrain : `原${terrain}水域`} ${coordinates}`;
+  };
+  const explorerName = (id?: string) => {
+    const explorer = room.explorers.find((item) => item.id === id);
+    if (!explorer) return "未知探险者";
+    const owner = room.players.find((player) => player.id === explorer.ownerId);
+    const owned = room.explorers.filter((item) => item.ownerId === explorer.ownerId);
+    return `${owner?.name ?? "未知玩家"}的第 ${owned.findIndex((item) => item.id === id) + 1} 名探险者`;
+  };
+  const creatureNameById = (id?: string) => {
+    const creature = room.creatures.find((item) => item.id === id);
+    if (creature) return creatureName(creature.type);
+    if (id?.startsWith("sea-serpent")) return "海蛇";
+    if (id?.startsWith("shark")) return "鲨鱼";
+    if (id?.startsWith("kaiju")) return "巨兽";
+    return "生物";
+  };
+  const explorerList = (ids: string[]) => ids.length
+    ? ids.map(explorerName).join("、")
+    : "没有探险者";
+  const sourceId = stringValue("sourceId");
+  const targetId = stringValue("targetId");
+
+  switch (event.type) {
+    case "room-created":
+      return `${actor} 创建了房间 ${room.code}，等待其他玩家或 AI 加入。`;
+    case "player-joined":
+      return `${actor} 加入远征队，当前共有 ${room.players.length} 个玩家席位。`;
+    case "spectator-joined":
+      return `${actor} 加入观战，不占用玩家席位。`;
+    case "game-started":
+      return "远征开始，所有玩家依次放置探险者。探险者宝藏价值仅对其所属玩家可见。";
+    case "explorer-placed":
+      return `${actor} 将 ${explorerName(stringValue("explorerId"))} 放置在 ${spaceName(stringValue("tileId"))}。`;
+    case "setup-rafts":
+      return "全部探险者已经放置完毕，开始依次在岛屿相邻水域放置木筏。";
+    case "raft-placed":
+      return `${actor} 在 ${spaceName(stringValue("waterId"))} 放置了一艘木筏。`;
+    case "turns-started":
+      return "初始木筏全部放置完毕，正式回合开始。每位玩家依次行动、水位上涨并移动生物。";
+    case "explorer-moved":
+      return `${actor} 操作 ${explorerName(stringValue("explorerId"))}，从 ${spaceName(sourceId)} 步行到 ${spaceName(targetId)}，消耗 1 个行动点。`;
+    case "swimmer-moved":
+      return `${actor} 操作 ${explorerName(stringValue("explorerId"))}，从 ${spaceName(sourceId)} 游到 ${spaceName(targetId)}；该探险者本回合不能再次游泳移动。`;
+    case "explorer-rescued":
+      return `${actor} 让 ${explorerName(stringValue("explorerId"))} 从 ${spaceName(sourceId)} 抵达 ${spaceName(targetId)}并获救。宝藏分值仅对所属玩家公开。`;
+    case "raft-moved": {
+      const boarded = stringValues("boardedExplorerIds");
+      return `${actor} 将木筏从 ${spaceName(sourceId)} 移动到 ${spaceName(targetId)}${boarded.length ? `，沿途接上了 ${explorerList(boarded)}` : "，途中没有新的落水者登船"}。`;
+    }
+    case "action-ended":
+      return `${actor} 结束行动阶段，接下来必须翻开当前最低地势。`;
+    case "tile-sunk":
+      return `${actor} 翻开了 ${spaceName(stringValue("tileId"))}。地块沉入水中，随后结算其背面效果。`;
+    case "volcano":
+      return `${spaceName(stringValue("tileId"))} 爆发火山；火山进度变为 ${room.volcanoes}/${room.maxVolcanoes}。`;
+    case "whirlpool":
+      return `${spaceName(stringValue("tileId"))} 出现漩涡，吞噬该格及相邻水域中的探险者、木筏和生物。`;
+    case "raft-revealed":
+      return `${spaceName(stringValue("tileId"))} 沉没后浮出一艘木筏；同格落水者会在容量允许时登船。`;
+    case "ability-drawn":
+      return `${actor} 从沉没地块获得一张能力牌。牌面内容只对该玩家公开。`;
+    case "ability-used":
+      return `${actor} 使用了一张能力牌，并完成了对应的移动或结算。`;
+    case "creature-die":
+      return `${actor} 掷出生物骰：${creatureName(payload?.result as CreatureType)}。`;
+    case "creature-phase":
+      return `${actor} 已完成水位上涨结算，现在需要掷生物骰并决定对应生物的移动。`;
+    case "creature-moved":
+      return `${actor} 将 ${creatureNameById(stringValue("creatureId"))} 从 ${spaceName(sourceId)} 移动到 ${spaceName(targetId)}。`;
+    case "creature-spawned":
+      return `${creatureName(payload?.type as CreatureType)} 在 ${spaceName(stringValue("locationId"))} 出现，并立即检查同格攻击。`;
+    case "creature-skipped":
+      return `${actor} 跳过了本次生物移动；可能是主动结束，也可能是场上没有合法目标。`;
+    case "repellent-window":
+      return `${creatureNameById(stringValue("creatureId"))} 即将攻击，拥有驱逐剂的受威胁玩家可以响应。海蛇攻击不会进入该窗口。`;
+    case "repellent-used":
+      return `${actor} 使用驱逐剂移除了 ${creatureNameById(stringValue("creatureId"))}，本次攻击被取消。`;
+    case "repellent-declined":
+      return `${actor} 放弃使用驱逐剂；若其他受威胁玩家也放弃，攻击将继续结算。`;
+    case "shark-attack": {
+      const affected = stringValues("affectedExplorerIds");
+      return `鲨鱼在 ${spaceName(stringValue("locationId"))} 发动攻击，${affected.length ? `${explorerList(affected)} 失踪` : "没有游泳者受到伤害"}。木筏乘员不受影响。`;
+    }
+    case "sea-serpent-attack": {
+      const affected = stringValues("affectedExplorerIds");
+      return `海蛇在 ${spaceName(stringValue("locationId"))} 直接攻击，摧毁同格木筏并使 ${explorerList(affected)} 失踪。海蛇不能被驱逐剂阻止。`;
+    }
+    case "kaiju-attack":
+      return `巨兽在 ${spaceName(stringValue("locationId"))} 撞击，摧毁同格木筏，并开始逐个推离同格探险者和生物。`;
+    case "unit-displaced": {
+      const entity = payload?.entityKind === "explorer"
+        ? explorerName(stringValue("entityId"))
+        : creatureNameById(stringValue("entityId"));
+      return `巨兽将 ${entity} 从 ${spaceName(sourceId)} 推到 ${spaceName(targetId)}；方向由${payload?.random ? "系统随机" : "当前玩家选择"}。到达后立即检查登船或生物攻击。`;
+    }
+    case "raft-boarded":
+      return `${actor} 选择 ${explorerList(stringValues("explorerIds"))} 登上同格木筏。`;
+    case "raft-rescue":
+      return `${actor} 的木筏沿航线接上了 ${explorerList(stringValues("boardedExplorerIds"))}。`;
+    case "turn-started":
+      return `第 ${String(payload?.round ?? room.round)} 轮由 ${actor} 开始行动，获得 3 个行动点。`;
+    case "game-finished":
+      return `远征结束，最高分为 ${String(payload?.high ?? "") || "已结算"}；并列最高分玩家共同获胜。`;
+    default:
+      return event.message;
+  }
 }
 
 export const createAIId = () => `ai-${randomUUID()}`;

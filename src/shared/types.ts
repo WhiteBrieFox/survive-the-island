@@ -104,6 +104,7 @@ export interface GameEventView {
   type: string;
   actorId?: string;
   message: string;
+  detail?: string;
   payload?: Record<string, unknown>;
 }
 
