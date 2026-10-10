@@ -75,6 +75,62 @@
       "animations": [
         "Bob"
       ]
+    },
+    {
+      "file": "volcano.glb",
+      "triangles": 1056,
+      "meshes": 4,
+      "animations": [
+        "LavaPulse"
+      ]
+    },
+    {
+      "file": "rescue-dock.glb",
+      "triangles": 4676,
+      "meshes": 6,
+      "animations": [
+        "BeaconPulse"
+      ]
+    },
+    {
+      "file": "whirlpool.glb",
+      "triangles": 2700,
+      "meshes": 2,
+      "animations": [
+        "Spin"
+      ]
+    },
+    {
+      "file": "coral-reef.glb",
+      "triangles": 1048,
+      "meshes": 6,
+      "animations": []
+    },
+    {
+      "file": "floating-debris.glb",
+      "triangles": 960,
+      "meshes": 3,
+      "animations": [
+        "Drift"
+      ]
+    },
+    {
+      "file": "terrain-beach.glb",
+      "triangles": 612,
+      "meshes": 5,
+      "animations": []
+    },
+    {
+      "file": "terrain-forest.glb",
+      "triangles": 656,
+      "meshes": 5,
+      "animations": []
+    },
+    {
+      "file": "terrain-mountain.glb",
+      "triangles": 234,
+      "meshes": 3,
+      "animations": []
     }
   ]
 }

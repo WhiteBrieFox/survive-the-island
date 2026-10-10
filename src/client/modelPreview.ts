@@ -18,7 +18,15 @@ const assets: Asset[] = [
   { file: "kaiju.glb", label: "巨兽", note: "原创两栖岛屿巨兽，强调厚重、推撞与棋盘可读性，不复刻现有影视角色。" },
   { file: "fire-dragon.glb", label: "终点火龙", note: "原创火山火龙守卫，用作救援终点附近的场景资产。" },
   { file: "sea-serpent.glb", label: "海蛇", note: "红色热带海蛇，带波浪式游动动画和高辨识度背鳍。" },
-  { file: "raft.glb", label: "木筏", note: "加宽七木结构，内置三个独立乘员锚点；彩色小人仅用于验证容量。" }
+  { file: "raft.glb", label: "木筏", note: "加宽七木结构，内置三个独立乘员锚点；彩色小人仅用于验证容量。" },
+  { file: "volcano.glb", label: "火山", note: "带熔岩河、火山岩与呼吸式熔岩脉动，可替换当前火山占位。" },
+  { file: "rescue-dock.glb", label: "救援码头", note: "完整救援小岛、靠泊码头、信标与旗帜，预留木筏靠泊方向。" },
+  { file: "whirlpool.glb", label: "漩涡", note: "多层泡沫环与漏斗水体，包含循环旋转动画。" },
+  { file: "coral-reef.glb", label: "珊瑚礁", note: "三色珊瑚、海草与沙质基座，适合海域重复实例化。" },
+  { file: "floating-debris.glb", label: "漂浮残骸", note: "断木、木板、绳圈和木桶组合，包含轻微漂移动画。" },
+  { file: "terrain-beach.glb", label: "海滩套件", note: "沙地、漂木、贝壳和石块，适配六边地形。" },
+  { file: "terrain-forest.glb", label: "森林套件", note: "三株错落树木与灌木，保持俯视可读性。" },
+  { file: "terrain-mountain.glb", label: "山地套件", note: "主峰、雪顶、侧峰和散落岩块，适配六边地形。" }
 ];
 
 document.querySelector<HTMLDivElement>("#preview-root")!.innerHTML = `
@@ -174,13 +182,35 @@ async function loadAsset(index: number) {
   const bounds = new THREE.Box3().setFromObject(model);
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
-  const horizontalAssets = new Set(["shark.glb", "sea-serpent.glb", "raft.glb"]);
+  const horizontalAssets = new Set([
+    "shark.glb",
+    "sea-serpent.glb",
+    "raft.glb",
+    "whirlpool.glb",
+    "coral-reef.glb",
+    "floating-debris.glb",
+    "terrain-beach.glb"
+  ]);
+  const flatAssets = new Set([
+    "whirlpool.glb",
+    "coral-reef.glb",
+    "floating-debris.glb",
+    "terrain-beach.glb"
+  ]);
   const targetSizes: Record<string, number> = {
     "shark.glb": 2.8,
     "sea-serpent.glb": 2.8,
     "raft.glb": 2.35,
     "fire-dragon.glb": 2.5,
-    "kaiju.glb": 2.75
+    "kaiju.glb": 2.75,
+    "volcano.glb": 1.85,
+    "rescue-dock.glb": 2.5,
+    "whirlpool.glb": 2.5,
+    "coral-reef.glb": 2.35,
+    "floating-debris.glb": 2.25,
+    "terrain-beach.glb": 2.35,
+    "terrain-forest.glb": 2.15,
+    "terrain-mountain.glb": 2.25
   };
   const targetSize = asset.file.includes("tree") ? 2.8 : targetSizes[asset.file] ?? 2.65;
   const sourceSize = horizontalAssets.has(asset.file) ? Math.max(size.x, size.z) : size.y;
@@ -193,16 +223,20 @@ async function loadAsset(index: number) {
 
   const targetY = Math.max(displayHeight * 0.45, 0.5);
   controls.target.set(0, targetY, 0);
-  const displayWidth = Math.max(size.x, size.z) * scale;
+  const displayWidth = (flatAssets.has(asset.file)
+    ? Math.hypot(size.x, size.z)
+    : Math.max(size.x, size.z)) * scale;
   const verticalFov = THREE.MathUtils.degToRad(camera.fov);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const fitHeightDistance = displayHeight / (2 * Math.tan(verticalFov / 2));
   const fitWidthDistance = displayWidth / (2 * Math.tan(horizontalFov / 2));
   const isMobile = window.innerWidth <= 680;
   const fittedDistance = Math.max(fitHeightDistance, fitWidthDistance) * (isMobile ? 1.48 : 1.28);
-  const minimumDistance = horizontalAssets.has(asset.file)
-    ? (isMobile ? 4.8 : 4.1)
-    : (isMobile ? 4.6 : 3.8);
+  const minimumDistance = flatAssets.has(asset.file)
+    ? (isMobile ? 5.6 : 4.45)
+    : horizontalAssets.has(asset.file)
+      ? (isMobile ? 4.8 : 4.1)
+      : (isMobile ? 4.6 : 3.8);
   const distance = Math.max(fittedDistance, minimumDistance);
   const direction = new THREE.Vector3(0.56, 0.34, 0.76).normalize();
   camera.position.copy(controls.target).add(direction.multiplyScalar(distance));

@@ -71,12 +71,33 @@ const materials = {
   wood: material("RaftWood", "#9b5d2d", 0.9),
   woodLight: material("RaftWoodLight", "#c68a45", 0.86),
   ropeFiber: material("RopeFiber", "#d2b16d", 0.96),
-  sail: material("RolledSail", "#e4d4a5", 0.88)
+  sail: material("RolledSail", "#e4d4a5", 0.88),
+  rock: material("VolcanicRock", "#3b4145", 0.9),
+  rockLight: material("WeatheredRock", "#747b78", 0.88),
+  lava: material("Lava", "#ff5a22", 0.28),
+  lavaHot: material("LavaHot", "#ffc53d", 0.24),
+  sand: material("TropicalSand", "#dcb96d", 0.94),
+  sandLight: material("SunlitSand", "#efd58e", 0.92),
+  water: material("WhirlpoolWater", "#208f9c", 0.36),
+  waterLight: material("SeaFoam", "#bceee2", 0.42),
+  coralPink: material("CoralPink", "#ef6f72", 0.78),
+  coralGold: material("CoralGold", "#e6a842", 0.82),
+  coralBlue: material("CoralBlue", "#498eb1", 0.76),
+  dockWood: material("DockWood", "#80502d", 0.9),
+  beacon: material("BeaconPaint", "#f2eee2", 0.8),
+  beaconRed: material("BeaconRed", "#d94b3d", 0.68),
+  grass: material("IslandGrass", "#499043", 0.86),
+  grassDark: material("IslandGrassDark", "#23613c", 0.88),
+  snow: material("MountainSnow", "#e9f1ec", 0.72)
 };
 materials.leaf.side = THREE.DoubleSide;
 materials.leafDark.side = THREE.DoubleSide;
 materials.leafLight.side = THREE.DoubleSide;
 materials.dragonMembrane.side = THREE.DoubleSide;
+materials.water.transparent = true;
+materials.water.opacity = 0.88;
+materials.waterLight.transparent = true;
+materials.waterLight.opacity = 0.9;
 
 function mesh(geometry, mat, name, position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1]) {
   const value = new THREE.Mesh(geometry, mat);
@@ -580,6 +601,194 @@ function createRaft() {
   return { root, animations: [bob] };
 }
 
+function createVolcano() {
+  const root = new THREE.Group();
+  root.name = "volcano";
+  const pulse = new THREE.Group();
+  pulse.name = "VolcanoPulse";
+  root.add(pulse);
+
+  pulse.add(mesh(new THREE.CylinderGeometry(0.34, 0.92, 1.28, 12, 5), materials.rock, "VolcanoCone", [0, 0.64, 0]));
+  pulse.add(mesh(new THREE.CylinderGeometry(0.39, 0.34, 0.16, 14, 1, true), materials.rock, "CraterNeck", [0, 1.28, 0]));
+  pulse.add(mesh(new THREE.RingGeometry(0.27, 0.39, 24), materials.rock, "CraterRim", [0, 1.365, 0], [-Math.PI / 2, 0, 0]));
+  pulse.add(mesh(new THREE.CylinderGeometry(0.27, 0.29, 0.05, 20), materials.lava, "CraterLava", [0, 1.35, 0]));
+  pulse.add(mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.025, 18), materials.lavaHot, "CraterHotCore", [0, 1.382, 0]));
+  const lavaPaths = [
+    [[0.16, 1.24, 0.1], [0.26, 0.92, 0.16], [0.48, 0.58, 0.24], [0.68, 0.18, 0.38]],
+    [[-0.12, 1.22, -0.06], [-0.28, 0.9, -0.13], [-0.42, 0.54, -0.22], [-0.62, 0.16, -0.32]]
+  ];
+  lavaPaths.forEach((points, index) => pulse.add(curvedTrunk(`LavaFlow_${index}`, points, 0.055, index ? materials.lava : materials.lavaHot)));
+  for (let index = 0; index < 7; index += 1) {
+    const angle = (index / 7) * Math.PI * 2;
+    pulse.add(mesh(
+      new THREE.DodecahedronGeometry(0.12 + (index % 2) * 0.04, 0),
+      index % 2 ? materials.rock : materials.rockLight,
+      `VolcanicRock_${index}`,
+      [Math.cos(angle) * (0.75 + (index % 3) * 0.08), 0.1, Math.sin(angle) * (0.75 + (index % 3) * 0.08)]
+    ));
+  }
+  mergeMeshesByMaterial(pulse, "Volcano");
+  const animation = new THREE.AnimationClip("LavaPulse", 1.8, [
+    new THREE.VectorKeyframeTrack("VolcanoPulse.scale", [0, 0.9, 1.8], [1, 1, 1, 1.015, 1.03, 1.015, 1, 1, 1])
+  ]);
+  root.userData.assetType = "volcano";
+  return { root, animations: [animation] };
+}
+
+function createRescueDock() {
+  const root = new THREE.Group();
+  root.name = "rescue_dock";
+  const beacon = new THREE.Group();
+  beacon.name = "RescueBeacon";
+  root.add(beacon);
+
+  root.add(mesh(new THREE.CylinderGeometry(1.02, 1.12, 0.26, 12), materials.sand, "RescueIslet", [0, 0.13, 0]));
+  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.94, 0.12, 12), materials.grass, "RescueGrass", [0, 0.32, -0.08]));
+  for (let index = 0; index < 6; index += 1) {
+    const z = -0.48 + index * 0.2;
+    root.add(mesh(roundedBoxGeometry(0.64, 0.08, 0.16, 0.025), materials.dockWood, `DockPlank_${index}`, [0.94, 0.28, z]));
+  }
+  for (const z of [-0.62, 0.62]) {
+    root.add(mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.65, 10), materials.dockWood, `DockPost_${z}`, [1.22, 0.08, z]));
+  }
+  beacon.add(mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.78, 12), materials.beacon, "BeaconTower", [-0.3, 0.78, -0.05]));
+  beacon.add(mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.12, 12), materials.beaconRed, "BeaconLamp", [-0.3, 1.2, -0.05]));
+  beacon.add(mesh(new THREE.ConeGeometry(0.24, 0.18, 12), materials.beaconRed, "BeaconRoof", [-0.3, 1.35, -0.05]));
+  root.add(mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.72, 10), materials.dockWood, "FlagPole", [0.28, 0.73, -0.22]));
+  root.add(mesh(roundedBoxGeometry(0.42, 0.24, 0.035, 0.018), materials.beaconRed, "RescueFlag", [0.48, 0.98, -0.22], [0, 0, -0.12]));
+  mergeMeshesByMaterial(root, "RescueDock", [beacon]);
+  mergeMeshesByMaterial(beacon, "RescueBeacon");
+  const animation = new THREE.AnimationClip("BeaconPulse", 2, [
+    new THREE.VectorKeyframeTrack("RescueBeacon.scale", [0, 1, 2], [1, 1, 1, 1.025, 1.04, 1.025, 1, 1, 1])
+  ]);
+  root.userData.assetType = "rescue-island";
+  root.userData.dockDirection = "+X";
+  return { root, animations: [animation] };
+}
+
+function createWhirlpool() {
+  const root = new THREE.Group();
+  root.name = "whirlpool";
+  const spin = new THREE.Group();
+  spin.name = "WhirlpoolSpin";
+  root.add(spin);
+  for (let index = 0; index < 5; index += 1) {
+    spin.add(mesh(
+      new THREE.TorusGeometry(0.22 + index * 0.15, 0.045 + index * 0.006, 8, 32, Math.PI * (1.35 + index * 0.08)),
+      index % 2 ? materials.water : materials.waterLight,
+      `WhirlpoolRing_${index}`,
+      [0, 0.06 + index * 0.022, 0],
+      [Math.PI / 2, 0, index * 0.55],
+      [1, 1, 0.78]
+    ));
+  }
+  spin.add(mesh(new THREE.ConeGeometry(0.36, 0.62, 20, 4, true), materials.water, "WhirlpoolFunnel", [0, -0.24, 0], [Math.PI, 0, 0]));
+  mergeMeshesByMaterial(spin, "Whirlpool");
+  const animation = new THREE.AnimationClip("Spin", 2.4, [
+    new THREE.QuaternionKeyframeTrack(
+      "WhirlpoolSpin.quaternion",
+      [0, 1.2, 2.4],
+      [0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, -1]
+    )
+  ]);
+  root.userData.assetType = "whirlpool";
+  return { root, animations: [animation] };
+}
+
+function createCoralReef() {
+  const root = new THREE.Group();
+  root.name = "coral_reef";
+  root.add(mesh(new THREE.CylinderGeometry(0.75, 0.88, 0.16, 14), materials.sand, "ReefBase", [0, 0.08, 0]));
+  const coralMats = [materials.coralPink, materials.coralGold, materials.coralBlue];
+  for (let index = 0; index < 10; index += 1) {
+    const angle = (index / 10) * Math.PI * 2;
+    const radius = 0.2 + (index % 3) * 0.18;
+    const height = 0.24 + (index % 4) * 0.09;
+    root.add(mesh(
+      new THREE.CylinderGeometry(0.045 + (index % 2) * 0.018, 0.075, height, 7),
+      coralMats[index % coralMats.length],
+      `CoralStem_${index}`,
+      [Math.cos(angle) * radius, 0.16 + height / 2, Math.sin(angle) * radius],
+      [index % 2 ? 0.16 : -0.12, 0, angle * 0.08]
+    ));
+    if (index % 3 === 0) {
+      root.add(mesh(new THREE.TorusGeometry(0.1, 0.035, 6, 14), coralMats[(index + 1) % 3], `TubeCoral_${index}`, [Math.cos(angle) * radius, 0.28 + height, Math.sin(angle) * radius], [Math.PI / 2, 0, 0]));
+    }
+  }
+  root.add(foliageCluster("Seaweed_1", [-0.42, 0.26, 0.2], [0.22, 0.55, 0.18], materials.leafDark, 0));
+  root.add(foliageCluster("Seaweed_2", [0.38, 0.23, -0.24], [0.2, 0.48, 0.18], materials.leaf, 0));
+  mergeMeshesByMaterial(root, "CoralReef");
+  root.userData.assetType = "coral-reef";
+  return { root, animations: [] };
+}
+
+function createFloatingDebris() {
+  const root = new THREE.Group();
+  root.name = "floating_debris";
+  const debris = new THREE.Group();
+  debris.name = "DebrisBob";
+  root.add(debris);
+  debris.add(mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.15, 10), materials.wood, "BrokenLog", [-0.18, 0.11, 0], [Math.PI / 2, 0, 0.28]));
+  debris.add(mesh(roundedBoxGeometry(0.22, 0.06, 0.72, 0.025), materials.woodLight, "BrokenPlank", [0.36, 0.15, 0.08], [0, 0.45, 0.12]));
+  debris.add(mesh(new THREE.TorusGeometry(0.18, 0.035, 7, 18), materials.ropeFiber, "LooseRope", [-0.02, 0.2, 0.2], [Math.PI / 2, 0, 0]));
+  debris.add(mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.34, 12), materials.woodLight, "Barrel", [0.44, 0.22, -0.3], [Math.PI / 2, 0, 0.22]));
+  mergeMeshesByMaterial(debris, "FloatingDebris");
+  const animation = new THREE.AnimationClip("Drift", 3.4, [
+    new THREE.VectorKeyframeTrack("DebrisBob.position", [0, 1.7, 3.4], [0, 0, 0, 0.05, 0.045, -0.04, 0, 0, 0]),
+    new THREE.QuaternionKeyframeTrack("DebrisBob.quaternion", [0, 1.7, 3.4], [0.015, 0, -0.02, 0.999, -0.015, 0, 0.02, 0.999, 0.015, 0, -0.02, 0.999])
+  ]);
+  root.userData.assetType = "floating-debris";
+  return { root, animations: [animation] };
+}
+
+function createBeachDecor() {
+  const root = new THREE.Group();
+  root.name = "terrain_beach_decor";
+  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.12, 12), materials.sand, "SandPatch", [0, 0.06, 0]));
+  root.add(curvedTrunk("Driftwood", [[-0.52, 0.13, -0.2], [-0.1, 0.17, -0.06], [0.34, 0.14, 0.08]], 0.065, materials.woodLight));
+  for (let index = 0; index < 5; index += 1) {
+    const angle = index * 1.17;
+    root.add(mesh(new THREE.DodecahedronGeometry(0.07 + (index % 2) * 0.03, 0), index % 2 ? materials.rockLight : materials.sandLight, `BeachStone_${index}`, [Math.cos(angle) * 0.58, 0.14, Math.sin(angle) * 0.48]));
+  }
+  root.add(mesh(new THREE.TorusGeometry(0.1, 0.03, 6, 14, Math.PI * 1.4), materials.coralPink, "Shell", [0.35, 0.15, -0.34], [Math.PI / 2, 0, 0.3]));
+  mergeMeshesByMaterial(root, "BeachDecor");
+  root.userData.assetType = "terrain-decor";
+  root.userData.terrain = "beach";
+  return { root, animations: [] };
+}
+
+function createForestDecor() {
+  const root = new THREE.Group();
+  root.name = "terrain_forest_decor";
+  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.12, 12), materials.grassDark, "ForestFloor", [0, 0.06, 0]));
+  const treePositions = [[-0.42, 0, -0.14], [0.36, 0, -0.12], [0.02, 0, 0.42]];
+  treePositions.forEach((position, index) => {
+    root.add(mesh(new THREE.CylinderGeometry(0.055, 0.08, 0.4 + index * 0.08, 8), materials.trunk, `ForestTrunk_${index}`, [position[0], 0.28 + index * 0.04, position[2]]));
+    root.add(mesh(new THREE.DodecahedronGeometry(0.24 + index * 0.025, 1), index % 2 ? materials.leaf : materials.leafDark, `ForestCrown_${index}`, [position[0], 0.58 + index * 0.08, position[2]], [0, index * 0.35, 0], [1, 1.12, 1]));
+  });
+  root.add(foliageCluster("ForestBush", [-0.02, 0.18, -0.35], [0.46, 0.26, 0.38], materials.leafLight, 1));
+  mergeMeshesByMaterial(root, "ForestDecor");
+  root.userData.assetType = "terrain-decor";
+  root.userData.terrain = "forest";
+  return { root, animations: [] };
+}
+
+function createMountainDecor() {
+  const root = new THREE.Group();
+  root.name = "terrain_mountain_decor";
+  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.12, 12), materials.rockLight, "MountainBase", [0, 0.06, 0]));
+  root.add(mesh(new THREE.ConeGeometry(0.5, 1.05, 7), materials.rock, "MountainPeak", [-0.18, 0.58, 0]));
+  root.add(mesh(new THREE.ConeGeometry(0.24, 0.32, 7), materials.snow, "SnowCap", [-0.18, 1.01, 0]));
+  root.add(mesh(new THREE.ConeGeometry(0.33, 0.72, 7), materials.rockLight, "MountainShoulder", [0.34, 0.42, 0.12], [0, 0, -0.06]));
+  for (let index = 0; index < 4; index += 1) {
+    root.add(mesh(new THREE.DodecahedronGeometry(0.1 + index * 0.015, 0), index % 2 ? materials.rock : materials.rockLight, `MountainRock_${index}`, [-0.52 + index * 0.31, 0.18, 0.48 - index * 0.12]));
+  }
+  mergeMeshesByMaterial(root, "MountainDecor");
+  root.userData.assetType = "terrain-decor";
+  root.userData.terrain = "mountain";
+  return { root, animations: [] };
+}
+
 function taperedLeafGeometry(length = 1, width = 0.3, bend = 0.16, segments = 7) {
   const positions = [];
   const indices = [];
@@ -790,6 +999,14 @@ assets.push(await exportModel("kaiju.glb", createKaiju));
 assets.push(await exportModel("fire-dragon.glb", createFireDragon));
 assets.push(await exportModel("sea-serpent.glb", createSeaSerpent));
 assets.push(await exportModel("raft.glb", createRaft));
+assets.push(await exportModel("volcano.glb", createVolcano));
+assets.push(await exportModel("rescue-dock.glb", createRescueDock));
+assets.push(await exportModel("whirlpool.glb", createWhirlpool));
+assets.push(await exportModel("coral-reef.glb", createCoralReef));
+assets.push(await exportModel("floating-debris.glb", createFloatingDebris));
+assets.push(await exportModel("terrain-beach.glb", createBeachDecor));
+assets.push(await exportModel("terrain-forest.glb", createForestDecor));
+assets.push(await exportModel("terrain-mountain.glb", createMountainDecor));
 await writeFile(resolve(outputDir, "manifest.json"), JSON.stringify({
   generatedAt: "2026-10-10",
   status: "preview-only",
