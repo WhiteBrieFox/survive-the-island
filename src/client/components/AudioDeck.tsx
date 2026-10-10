@@ -45,7 +45,6 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
   const [open, setOpen] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const bgmRef = useRef<HTMLAudioElement>(null);
-  const ambienceRef = useRef<HTMLAudioElement>(null);
   const previousEventId = useRef<number | null>(null);
   const track = bgmFor(room);
 
@@ -57,7 +56,6 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
     setUnlocked(true);
     if (mixer.muted) return;
     void bgmRef.current?.play().catch(() => undefined);
-    void ambienceRef.current?.play().catch(() => undefined);
   };
 
   useEffect(() => {
@@ -75,18 +73,30 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
 
   useEffect(() => {
     const bgm = bgmRef.current;
-    const ambience = ambienceRef.current;
-    if (!bgm || !ambience) return;
+    if (!bgm) return;
+    if (bgm.dataset.track !== track) {
+      bgm.pause();
+      bgm.currentTime = 0;
+      bgm.src = track;
+      bgm.dataset.track = track;
+      bgm.load();
+    }
     bgm.volume = mixer.muted ? 0 : mixer.bgm;
-    ambience.volume = mixer.muted ? 0 : mixer.bgm * (room ? 0.22 : 0.12);
     if (!unlocked || mixer.muted) {
       bgm.pause();
-      ambience.pause();
       return;
     }
     void bgm.play().catch(() => setUnlocked(false));
-    void ambience.play().catch(() => undefined);
-  }, [mixer.bgm, mixer.muted, room, track, unlocked]);
+  }, [mixer.bgm, mixer.muted, track, unlocked]);
+
+  useEffect(() => () => {
+    const bgm = bgmRef.current;
+    if (!bgm) return;
+    bgm.pause();
+    bgm.currentTime = 0;
+    bgm.removeAttribute("src");
+    bgm.load();
+  }, []);
 
   useEffect(() => {
     const event = room?.events.at(-1);
@@ -106,8 +116,7 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
 
   return (
     <div className="audio-deck">
-      <audio ref={bgmRef} key={track} src={track} loop preload="auto" />
-      <audio ref={ambienceRef} src="/assets/audio/ocean-ambience.m4a" loop preload="auto" />
+      <audio ref={bgmRef} loop preload="auto" />
       <button
         className="icon-button audio-toggle"
         title={mixer.muted ? "开启音乐" : unlocked ? "音乐设置" : "点击开启音乐"}
