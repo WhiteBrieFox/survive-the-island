@@ -119,7 +119,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
               </article>
               <article className="creature-rule kaiju-rule">
                 <div className="creature-rule-art">巨兽</div>
-                <div><h3>巨兽 · 最多移动 2 格</h3><p>可以踏上陆地或进入水域，会摧毁同格木筏并推走其他单位。骰子移动时由掷骰者选择推离方向；翻格出现时随机推离。</p></div>
+                <div><h3>巨兽 · 最多移动 2 格</h3><p>可以踏上陆地或进入水域，会摧毁同格木筏并推走其他单位。被推上有空位的木筏会直接登船；被推到鲨鱼或海蛇所在格会立即结算攻击。骰子移动时由掷骰者选择推离方向，翻格出现时随机推离。</p></div>
               </article>
               <div className="rule-callout"><Shield size={20} /><span>驱逐剂可在攻击响应窗口移除攻击者，并保护该格全部单位。若对应生物没有合法移动目标，系统会自动跳过。</span></div>
             </div>

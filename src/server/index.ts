@@ -79,6 +79,7 @@ const normalizeRoom = (room: GameRoom): GameRoom => ({
   displacementQueue: room.displacementQueue ?? [],
   displacementMode: room.displacementMode ?? "choose",
   interactionContinuation: room.interactionContinuation ?? "none",
+  postDisplacementContinuation: room.postDisplacementContinuation ?? "none",
   reconnectTokens: room.reconnectTokens ?? {},
   spectatorTokens: room.spectatorTokens ?? {}
 });

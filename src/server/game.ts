@@ -67,6 +67,7 @@ export interface GameRoom {
   displacementQueue: Displacement[];
   displacementMode: "choose" | "random";
   interactionContinuation: "none" | "finish-creature" | "displacement";
+  postDisplacementContinuation: "none" | "finish-creature";
   reconnectTokens: Record<string, string>;
   spectatorTokens: Record<string, string>;
   aiTimer?: NodeJS.Timeout;
@@ -111,6 +112,7 @@ export function createRoom(code: string, hostId: string, hostName: string, passw
     log: [], events: [], winnerIds: [], setupPlaced: 0, resumePhase: null,
     creatureMovesRemaining: 0, creatureMoved: false, turnStartedWithoutExplorers: false,
     pendingAttack: null, displacementQueue: [], displacementMode: "choose", interactionContinuation: "none",
+    postDisplacementContinuation: "none",
     reconnectTokens: {}, spectatorTokens: {}
   };
   recordEvent(room, "room-created", `${hostName} 创建了房间`, hostId);
@@ -707,6 +709,10 @@ function applyCreatureAttack(room: GameRoom, creature: CreatureView) {
   }
   const raft = raftAt(room, creature.locationId);
   if (raft) destroyRaft(room, raft);
+  room.postDisplacementContinuation = room.interactionContinuation === "finish-creature"
+    ? "finish-creature"
+    : "none";
+  room.interactionContinuation = "displacement";
   room.displacementQueue = [
     ...room.explorers
       .filter((item) => item.locationId === creature.locationId && !item.lost && !item.rescued)
@@ -759,9 +765,10 @@ function processNextDisplacement(room: GameRoom) {
     return;
   }
   if (room.displacementMode === "random") {
-    moveDisplacedEntity(room, next, allowedTargetIds[Math.floor(Math.random() * allowedTargetIds.length)]);
     room.displacementQueue.shift();
-    processNextDisplacement(room);
+    const targetId = allowedTargetIds[Math.floor(Math.random() * allowedTargetIds.length)];
+    const interactionStarted = moveDisplacedEntity(room, next, targetId);
+    if (!interactionStarted) processNextDisplacement(room);
     return;
   }
   room.pendingChoice = {
@@ -773,6 +780,7 @@ function processNextDisplacement(room: GameRoom) {
 }
 
 function moveDisplacedEntity(room: GameRoom, displacement: Displacement, targetId: string) {
+  let interactionStarted = false;
   if (displacement.entityKind === "explorer") {
     const explorer = room.explorers.find((item) => item.id === displacement.entityId);
     if (explorer) {
@@ -780,6 +788,11 @@ function moveDisplacedEntity(room: GameRoom, displacement: Displacement, targetI
       const raft = raftAt(room, targetId);
       explorer.raftId = raft && occupants(room, raft.id).length < 3 ? raft.id : null;
       explorer.swimming = isWater(room, targetId) && !explorer.raftId;
+      const creature = room.creatures.find((item) => item.locationId === targetId && hasInteractionTarget(room, item));
+      if (creature) {
+        interactionStarted = true;
+        resolveCreatureInteraction(room, creature);
+      }
     }
   } else {
     const creature = room.creatures.find((item) => item.id === displacement.entityId);
@@ -788,6 +801,7 @@ function moveDisplacedEntity(room: GameRoom, displacement: Displacement, targetI
   recordEvent(room, "unit-displaced", "巨兽推离了一个单位", room.currentPlayerId ?? undefined, {
     ...displacement, targetId, random: room.displacementMode === "random"
   });
+  return interactionStarted;
 }
 
 export function resolveDisplacement(room: GameRoom, playerId: string, targetId: string) {
@@ -797,19 +811,25 @@ export function resolveDisplacement(room: GameRoom, playerId: string, targetId: 
   if (!pending || pending.type !== "displace" || !displacement || !pending.allowedTargetIds?.includes(targetId)) {
     throw new Error("请选择高亮的推离目标");
   }
-  moveDisplacedEntity(room, displacement, targetId);
   room.displacementQueue.shift();
-  processNextDisplacement(room);
+  const interactionStarted = moveDisplacedEntity(room, displacement, targetId);
+  if (!interactionStarted) processNextDisplacement(room);
   bump(room);
 }
 
 function completeInteraction(room: GameRoom) {
   room.pendingChoice = null;
   room.pendingAttack = null;
+  if (room.interactionContinuation === "displacement") {
+    if (room.displacementQueue.length) {
+      processNextDisplacement(room);
+      return;
+    }
+    room.interactionContinuation = room.postDisplacementContinuation;
+    room.postDisplacementContinuation = "none";
+  }
   room.displacementMode = "choose";
-  if (room.interactionContinuation === "displacement" && room.displacementQueue.length) {
-    processNextDisplacement(room);
-  } else if (room.interactionContinuation === "finish-creature") {
+  if (room.interactionContinuation === "finish-creature") {
     finishCreatureMove(room);
   } else if (room.turnPhase === "rising") {
     finishRisingStep(room);

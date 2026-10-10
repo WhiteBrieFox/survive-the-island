@@ -306,6 +306,128 @@ describe("complete game core", () => {
     expect(room.pendingChoice?.type).not.toBe("displace");
   });
 
+  it("boards an explorer displaced by a kaiju onto a raft with space", () => {
+    const room = startedRoom();
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "host")!;
+    const target = room.waterSpaces.find((space) =>
+      room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(tile, space))
+    )!;
+    const source = room.tiles.find((tile) => tile.active && !tile.isRescue && areAdjacent(tile, target))!;
+    const raft = room.rafts[0];
+    raft.locationId = target.id;
+    victim.locationId = victim.tileId = source.id;
+    victim.raftId = null;
+    victim.swimming = false;
+    room.creatures = room.creatures.filter((creature) => creature.locationId !== target.id);
+    room.displacementQueue = [{ entityId: victim.id, entityKind: "explorer" }];
+    room.displacementMode = "choose";
+    room.interactionContinuation = "displacement";
+    room.pendingChoice = {
+      type: "displace",
+      entityId: victim.id,
+      entityKind: "explorer",
+      allowedTargetIds: [target.id]
+    };
+
+    resolveDisplacement(room, "host", target.id);
+
+    expect(victim.locationId).toBe(target.id);
+    expect(victim.raftId).toBe(raft.id);
+    expect(victim.swimming).toBe(false);
+  });
+
+  it("lets a shark eat an explorer displaced into its water space", () => {
+    const room = startedRoom();
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "host")!;
+    const target = room.waterSpaces.find((space) =>
+      room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(tile, space)) &&
+      !room.rafts.some((raft) => raft.locationId === space.id)
+    )!;
+    const source = room.tiles.find((tile) => tile.active && !tile.isRescue && areAdjacent(tile, target))!;
+    victim.locationId = victim.tileId = source.id;
+    victim.raftId = null;
+    victim.swimming = false;
+    room.creatures = room.creatures.filter((creature) => creature.locationId !== target.id);
+    room.creatures.push({ id: "displacement-shark", type: "shark", locationId: target.id });
+    room.displacementQueue = [{ entityId: victim.id, entityKind: "explorer" }];
+    room.displacementMode = "choose";
+    room.interactionContinuation = "displacement";
+    room.pendingChoice = {
+      type: "displace",
+      entityId: victim.id,
+      entityKind: "explorer",
+      allowedTargetIds: [target.id]
+    };
+
+    resolveDisplacement(room, "host", target.id);
+
+    expect(victim.lost).toBe(true);
+    expect(room.log.some((entry) => entry.includes("鲨鱼消灭了"))).toBe(true);
+  });
+
+  it("lets a sea serpent destroy an explorer displaced into its space", () => {
+    const room = startedRoom();
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "host")!;
+    const target = room.waterSpaces.find((space) =>
+      room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(tile, space)) &&
+      !room.rafts.some((raft) => raft.locationId === space.id)
+    )!;
+    const source = room.tiles.find((tile) => tile.active && !tile.isRescue && areAdjacent(tile, target))!;
+    victim.locationId = victim.tileId = source.id;
+    victim.raftId = null;
+    victim.swimming = false;
+    room.creatures = room.creatures.filter((creature) => creature.locationId !== target.id);
+    room.creatures.push({ id: "displacement-serpent", type: "sea-serpent", locationId: target.id });
+    room.displacementQueue = [{ entityId: victim.id, entityKind: "explorer" }];
+    room.displacementMode = "choose";
+    room.interactionContinuation = "displacement";
+    room.pendingChoice = {
+      type: "displace",
+      entityId: victim.id,
+      entityKind: "explorer",
+      allowedTargetIds: [target.id]
+    };
+
+    resolveDisplacement(room, "host", target.id);
+
+    expect(victim.lost).toBe(true);
+    expect(room.log.some((entry) => entry.includes("海蛇摧毁了"))).toBe(true);
+  });
+
+  it("resumes a kaiju displacement queue after a repellent response", () => {
+    const room = startedRoom();
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "guest")!;
+    const target = room.waterSpaces.find((space) =>
+      room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(tile, space)) &&
+      !room.rafts.some((raft) => raft.locationId === space.id)
+    )!;
+    const source = room.tiles.find((tile) => tile.active && !tile.isRescue && areAdjacent(tile, target))!;
+    victim.locationId = victim.tileId = source.id;
+    victim.raftId = null;
+    victim.swimming = false;
+    room.players.find((player) => player.id === "guest")!.abilities.push("repellent");
+    room.creatures = room.creatures.filter((creature) => creature.locationId !== target.id);
+    room.creatures.push({ id: "repellent-shark", type: "shark", locationId: target.id });
+    room.displacementQueue = [{ entityId: victim.id, entityKind: "explorer" }];
+    room.displacementMode = "choose";
+    room.interactionContinuation = "displacement";
+    room.pendingChoice = {
+      type: "displace",
+      entityId: victim.id,
+      entityKind: "explorer",
+      allowedTargetIds: [target.id]
+    };
+
+    resolveDisplacement(room, "host", target.id);
+    expect(room.pendingChoice?.type).toBe("repellent");
+
+    respondRepellent(room, "guest", false);
+
+    expect(victim.lost).toBe(true);
+    expect(room.displacementQueue).toEqual([]);
+    expect(room.pendingChoice).toBeNull();
+  });
+
   it("lets AI complete setup and a full turn through normal commands", () => {
     const room = createRoom("ABC123", "host", "船长");
     room.players[0].ready = true;
