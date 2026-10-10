@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { areAdjacent, hexDistance } from "../shared/hex";
 import {
-  addPlayer, createRoom, endTurn, finishCreatureMovement, moveCreature, moveExplorer, placeExplorer, placeRaft,
-  publicState, resolveBoarding, resolveDisplacement, respondRepellent, rollCreatureDie, runAITurn, sinkChosenTile, startGame
+  addPlayer, createRoom, endTurn, finishCreatureMovement, moveCreature, moveExplorer, moveRaft, placeExplorer, placeRaft,
+  publicState, resolveBoarding, resolveDisplacement, respondRepellent, rollCreatureDie, runAITurn, sinkChosenTile, startGame,
+  useAbility
 } from "./game";
 
 type Room = ReturnType<typeof createRoom>;
@@ -182,6 +183,62 @@ describe("complete game core", () => {
     expect(explorer.raftId).toBe(raft.id);
     expect(explorer.locationId).toBe(raft.locationId);
     expect(explorer.swimming).toBe(false);
+  });
+
+  it("automatically boards a swimmer when a raft enters their space", () => {
+    const room = startedRoom();
+    const raft = room.rafts[0];
+    const source = [...room.tiles, ...room.waterSpaces].find((space) => space.id === raft.locationId)!;
+    const target = room.waterSpaces.find((space) =>
+      areAdjacent(source, space) &&
+      !room.rafts.some((candidate) => candidate.locationId === space.id) &&
+      !room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === space.id)
+    )!;
+    const swimmer = room.explorers.find((explorer) => explorer.ownerId !== "host")!;
+    swimmer.locationId = swimmer.tileId = target.id;
+    swimmer.raftId = null;
+    swimmer.swimming = true;
+
+    moveRaft(room, "host", raft.id, target.id);
+
+    expect(swimmer.raftId).toBe(raft.id);
+    expect(swimmer.swimming).toBe(false);
+    expect(swimmer.locationId).toBe(target.id);
+  });
+
+  it("uses a two-space paddles route that rescues a swimmer on the way", () => {
+    const room = startedRoom();
+    const raft = room.rafts[0];
+    const allSpaces = [...room.tiles, ...room.waterSpaces];
+    const source = allSpaces.find((space) => space.id === raft.locationId)!;
+    const route = room.waterSpaces.flatMap((target) => {
+      if (
+        hexDistance(source, target) !== 2 ||
+        room.rafts.some((candidate) => candidate.locationId === target.id) ||
+        room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === target.id)
+      ) return [];
+      const middle = allSpaces.find((space) =>
+        areAdjacent(source, space) &&
+        areAdjacent(space, target) &&
+        room.waterSpaces.some((water) => water.id === space.id) &&
+        !room.rafts.some((candidate) => candidate.locationId === space.id) &&
+        !room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === space.id)
+      );
+      return middle ? [{ middle, target }] : [];
+    })[0];
+    expect(route).toBeDefined();
+    const swimmer = room.explorers.find((explorer) => explorer.ownerId !== "host")!;
+    swimmer.locationId = swimmer.tileId = route.middle.id;
+    swimmer.raftId = null;
+    swimmer.swimming = true;
+    room.players.find((player) => player.id === "host")!.abilities.push("paddles");
+
+    useAbility(room, "host", "paddles", raft.id, route.target.id);
+
+    expect(raft.locationId).toBe(route.target.id);
+    expect(swimmer.raftId).toBe(raft.id);
+    expect(swimmer.locationId).toBe(route.target.id);
+    expect(swimmer.swimming).toBe(false);
   });
 
   it("keeps all three turn stages separate", () => {

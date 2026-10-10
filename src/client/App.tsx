@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Compass, Eye, Gamepad2, Plus, Radio, Users } from "lucide-react";
+import { BookOpen, Compass, Eye, Gamepad2, Plus, Radio, Users } from "lucide-react";
 import type { Ack, PublicRoomState, SessionView } from "../shared/types";
 import { AudioDeck } from "./components/AudioDeck";
 import { BoardScene } from "./components/BoardScene";
 import { GameHud } from "./components/GameHud";
 import { LobbyPanel } from "./components/LobbyPanel";
+import { RuleBook } from "./components/RuleBook";
 import { useGameStore } from "./gameStore";
 import { socket } from "./socket";
 
@@ -23,6 +24,7 @@ export function App() {
   const [asSpectator, setAsSpectator] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -191,15 +193,20 @@ export function App() {
             <span><Eye size={15} />支持观战</span>
             <span><Gamepad2 size={15} />服务端 AI</span>
           </div>
+          <button className="rules-entry-button" type="button" onClick={() => setRulesOpen(true)}>
+            <BookOpen size={17} />
+            查看完整规则
+          </button>
         </section>
       ) : room.phase === "lobby" ? (
-        <LobbyPanel room={room} clientId={clientId} role={role} />
+        <LobbyPanel room={room} clientId={clientId} role={role} onOpenRules={() => setRulesOpen(true)} />
       ) : (
-        <GameHud room={room} clientId={clientId} role={role} />
+        <GameHud room={room} clientId={clientId} role={role} onOpenRules={() => setRulesOpen(true)} />
       )}
 
       {notice && <div className="toast" role="status">{notice}</div>}
       <AudioDeck room={room} />
+      <RuleBook open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </main>
   );
 }

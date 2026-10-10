@@ -283,6 +283,58 @@ function controlsRaft(room: GameRoom, playerId: string, raft: RaftView) {
   return mine > 0 && [...counts].every(([id, count]) => id === playerId || mine >= count);
 }
 
+function boardSwimmersAt(room: GameRoom, raft: RaftView, locationId: string) {
+  const available = 3 - occupants(room, raft.id).length;
+  if (available <= 0) return [];
+  const boarded = room.explorers
+    .filter((item) => item.locationId === locationId && item.swimming && !item.lost && !item.rescued)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .slice(0, available);
+  boarded.forEach((item) => {
+    item.raftId = raft.id;
+    item.swimming = false;
+  });
+  return boarded.map((item) => item.id);
+}
+
+function raftRoute(room: GameRoom, fromId: string, targetId: string, maxDistance: number) {
+  const from = coord(room, fromId);
+  const target = coord(room, targetId);
+  if (!from || !target) throw new Error("木筏目标不合法");
+  const distance = hexDistance(from, target);
+  if (distance < 1 || distance > maxDistance) throw new Error("木筏目标不合法");
+  if (distance === 1) return [targetId];
+
+  const candidates = [...room.tiles, ...room.waterSpaces]
+    .filter((space) =>
+      areAdjacent(from, space) &&
+      areAdjacent(space, target) &&
+      isWater(room, space.id) &&
+      !raftAt(room, space.id) &&
+      !room.creatures.some((item) => item.type === "kaiju" && item.locationId === space.id)
+    )
+    .sort((a, b) => {
+      const swimmersA = room.explorers.filter((item) => item.locationId === a.id && item.swimming).length;
+      const swimmersB = room.explorers.filter((item) => item.locationId === b.id && item.swimming).length;
+      return swimmersB - swimmersA || a.id.localeCompare(b.id);
+    });
+  if (!candidates.length) throw new Error("木筏没有可通过的航线");
+  return [candidates[0].id, targetId];
+}
+
+function sailRaft(room: GameRoom, raft: RaftView, route: string[]) {
+  const boardedExplorerIds: string[] = [];
+  for (const locationId of route) {
+    raft.locationId = locationId;
+    occupants(room, raft.id).forEach((explorer) => {
+      explorer.locationId = locationId;
+      explorer.tileId = locationId;
+    });
+    boardedExplorerIds.push(...boardSwimmersAt(room, raft, locationId));
+  }
+  return boardedExplorerIds;
+}
+
 export function moveExplorer(room: GameRoom, playerId: string, explorerId: string, targetId: string) {
   requireTurn(room, playerId, "action");
   if (room.actionsLeft <= 0) throw new Error("行动点已经用完");
@@ -335,11 +387,13 @@ export function moveRaft(room: GameRoom, playerId: string, raftId: string, targe
   if (!raft || !controlsRaft(room, playerId, raft)) throw new Error("你不能控制这艘木筏");
   if (!from || !to || !areAdjacent(from, to) || !isWater(room, targetId) || raftAt(room, targetId)) throw new Error("木筏目标不合法");
   if (room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) throw new Error("巨兽阻挡了目标");
-  raft.locationId = targetId;
-  occupants(room, raft.id).forEach((explorer) => { explorer.locationId = targetId; explorer.tileId = targetId; });
+  const route = raftRoute(room, raft.locationId, targetId, 1);
+  const boardedExplorerIds = sailRaft(room, raft, route);
   if (!free) room.actionsLeft -= 1;
   resolveInteractions(room, targetId);
-  recordEvent(room, "raft-moved", "木筏移动了", playerId, { raftId, targetId, free });
+  recordEvent(room, "raft-moved", boardedExplorerIds.length ? `木筏移动并救起 ${boardedExplorerIds.length} 名落水者` : "木筏移动了", playerId, {
+    raftId, targetId, free, route, boardedExplorerIds
+  });
   bump(room);
 }
 
@@ -820,10 +874,20 @@ export function useAbility(room: GameRoom, playerId: string, ability: AbilityTyp
     const raft = room.rafts.find((item) => item.id === actorId);
     const from = raft ? coord(room, raft.locationId) : undefined;
     const to = targetId ? coord(room, targetId) : undefined;
-    if (!raft || !from || !to || !targetId || !controlsRaft(room, playerId, raft) || hexDistance(from, to) > 2 || !isWater(room, targetId) || raftAt(room, targetId)) throw new Error("船桨目标不合法");
-    raft.locationId = targetId;
-    occupants(room, raft.id).forEach((item) => { item.locationId = item.tileId = targetId; });
+    if (!raft || !from || !to || !targetId || !controlsRaft(room, playerId, raft) ||
+      hexDistance(from, to) < 1 || hexDistance(from, to) > 2 ||
+      !isWater(room, targetId) || raftAt(room, targetId) ||
+      room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) {
+      throw new Error("船桨目标不合法");
+    }
+    const route = raftRoute(room, raft.locationId, targetId, 2);
+    const boardedExplorerIds = sailRaft(room, raft, route);
     resolveInteractions(room, targetId);
+    if (boardedExplorerIds.length) {
+      recordEvent(room, "raft-rescue", `木筏沿途救起 ${boardedExplorerIds.length} 名落水者`, playerId, {
+        raftId: raft.id, route, boardedExplorerIds
+      });
+    }
   } else if (ability === "dolphin") {
     const explorer = room.explorers.find((item) => item.id === actorId && item.ownerId === playerId && item.swimming);
     const from = explorer?.locationId ? coord(room, explorer.locationId) : undefined;

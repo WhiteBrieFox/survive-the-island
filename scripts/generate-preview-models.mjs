@@ -51,9 +51,11 @@ const materials = {
   mouth: material("Mouth", "#633332", 0.78),
   trunk: material("SculptedBark", "#76502e", 0.94),
   trunkLight: material("SculptedBarkLight", "#9a7042", 0.9),
+  trunkDark: material("BarkGroove", "#49351f", 0.96),
   leaf: material("LeafBright", "#4d982f", 0.78),
   leafDark: material("LeafDark", "#2f7535", 0.82),
   leafLight: material("LeafHighlight", "#79b83d", 0.74),
+  leafYoung: material("YoungLeaf", "#a5cb49", 0.76),
   coconut: material("Coconut", "#5e3b22", 0.92),
   kaiju: material("KaijuCobalt", "#315f9f", 0.62),
   kaijuDark: material("KaijuDeepBlue", "#173d70", 0.68),
@@ -78,6 +80,9 @@ const materials = {
   lavaHot: material("LavaHot", "#ffc53d", 0.24),
   sand: material("TropicalSand", "#dcb96d", 0.94),
   sandLight: material("SunlitSand", "#efd58e", 0.92),
+  shellIvory: material("ShellIvory", "#f4e6c4", 0.78),
+  shellRose: material("ShellRose", "#e9a18c", 0.76),
+  seaGlass: material("SeaGlass", "#58b7a7", 0.32),
   water: material("WhirlpoolWater", "#208f9c", 0.36),
   waterLight: material("SeaFoam", "#bceee2", 0.42),
   coralPink: material("CoralPink", "#ef6f72", 0.78),
@@ -88,11 +93,21 @@ const materials = {
   beaconRed: material("BeaconRed", "#d94b3d", 0.68),
   grass: material("IslandGrass", "#499043", 0.86),
   grassDark: material("IslandGrassDark", "#23613c", 0.88),
-  snow: material("MountainSnow", "#e9f1ec", 0.72)
+  moss: material("ForestMoss", "#638c3b", 0.94),
+  flowerYellow: material("FlowerYellow", "#f1c84f", 0.68),
+  flowerCoral: material("FlowerCoral", "#ef7867", 0.68),
+  mushroomCap: material("MushroomCap", "#d7664f", 0.82),
+  mushroomStem: material("MushroomStem", "#e9d7ad", 0.9),
+  rockDark: material("RockStrataDark", "#2d3639", 0.94),
+  rockWarm: material("RockStrataWarm", "#8b806d", 0.92),
+  crystal: material("MountainCrystal", "#58b9c2", 0.26, 0.08),
+  snow: material("MountainSnow", "#e9f1ec", 0.72),
+  snowShade: material("MountainSnowShade", "#bdd9d7", 0.76)
 };
 materials.leaf.side = THREE.DoubleSide;
 materials.leafDark.side = THREE.DoubleSide;
 materials.leafLight.side = THREE.DoubleSide;
+materials.leafYoung.side = THREE.DoubleSide;
 materials.dragonMembrane.side = THREE.DoubleSide;
 materials.water.transparent = true;
 materials.water.opacity = 0.88;
@@ -741,20 +756,144 @@ function createFloatingDebris() {
   return { root, animations: [animation] };
 }
 
+function addGrassTuft(parent, name, position, scale = 1, palette = [materials.grassDark, materials.grass, materials.leafYoung]) {
+  const tuft = new THREE.Group();
+  tuft.name = name;
+  tuft.position.set(...position);
+  for (let index = 0; index < 7; index += 1) {
+    const angle = (index / 7) * Math.PI * 2;
+    tuft.add(mesh(
+      taperedLeafGeometry(0.2 * scale + (index % 3) * 0.035, 0.052 * scale, 0.06 * scale, 5),
+      palette[index % palette.length],
+      `${name}_Blade_${index}`,
+      [0, 0.012, 0],
+      [-0.08 - (index % 2) * 0.08, angle, (index % 2 ? 1 : -1) * 0.12]
+    ));
+  }
+  parent.add(tuft);
+}
+
+function addPebbleCluster(parent, name, position, scale = 1) {
+  const pebbleData = [
+    [-0.06, 0.028, 0.01, 0.062, materials.rockLight],
+    [0.015, 0.022, -0.025, 0.048, materials.rockWarm],
+    [0.07, 0.018, 0.025, 0.036, materials.sandLight],
+    [-0.015, 0.014, 0.065, 0.028, materials.rock]
+  ];
+  pebbleData.forEach(([x, y, z, radius, mat], index) => {
+    parent.add(mesh(
+      new THREE.DodecahedronGeometry(radius * scale, 1),
+      mat,
+      `${name}_Pebble_${index}`,
+      [position[0] + x * scale, position[1] + y * scale, position[2] + z * scale],
+      [index * 0.31, index * 0.47, index * 0.18],
+      [1.15, 0.62, 0.9]
+    ));
+  });
+}
+
+function starfishGeometry(outerRadius = 0.12, innerRadius = 0.045) {
+  const shape = new THREE.Shape();
+  for (let index = 0; index < 10; index += 1) {
+    const angle = -Math.PI / 2 + (index / 10) * Math.PI * 2;
+    const radius = index % 2 === 0 ? outerRadius : innerRadius;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (index === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.024,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    bevelSize: 0.012,
+    bevelThickness: 0.008
+  });
+  geometry.center();
+  return geometry;
+}
+
+function rockFaceGeometry(points) {
+  const positions = points.flat();
+  const indices = [];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    indices.push(0, index, index + 1);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function addFlower(parent, name, position, mat, scale = 1) {
+  parent.add(mesh(new THREE.CylinderGeometry(0.008 * scale, 0.012 * scale, 0.09 * scale, 6), materials.grassDark, `${name}_Stem`, [position[0], position[1] + 0.045 * scale, position[2]]));
+  for (let index = 0; index < 5; index += 1) {
+    const angle = (index / 5) * Math.PI * 2;
+    parent.add(mesh(
+      new THREE.SphereGeometry(0.025 * scale, 8, 6),
+      mat,
+      `${name}_Petal_${index}`,
+      [position[0] + Math.cos(angle) * 0.026 * scale, position[1] + 0.1 * scale, position[2] + Math.sin(angle) * 0.026 * scale],
+      [0, 0, 0],
+      [1.2, 0.42, 0.78]
+    ));
+  }
+  parent.add(mesh(new THREE.SphereGeometry(0.018 * scale, 8, 6), materials.flowerYellow, `${name}_Center`, [position[0], position[1] + 0.104 * scale, position[2]]));
+}
+
 function createBeachDecor() {
   const root = new THREE.Group();
   root.name = "terrain_beach_decor";
-  root.add(curvedTrunk("Driftwood", [[-0.5, 0.07, -0.28], [-0.16, 0.11, -0.18], [0.18, 0.08, -0.08]], 0.055, materials.woodLight));
+  const driftwood = new THREE.Group();
+  driftwood.name = "DetailedDriftwood";
+  driftwood.add(curvedTrunk("DriftwoodCore", [[-0.62, 0.09, -0.37], [-0.28, 0.14, -0.31], [0.08, 0.11, -0.25], [0.34, 0.08, -0.3]], 0.07, materials.woodLight));
+  driftwood.add(curvedTrunk("DriftwoodShadow", [[-0.6, 0.075, -0.35], [-0.28, 0.1, -0.29], [0.06, 0.08, -0.23]], 0.018, materials.trunkDark));
+  driftwood.add(curvedTrunk("DriftwoodBranchA", [[-0.34, 0.13, -0.31], [-0.42, 0.23, -0.4], [-0.48, 0.27, -0.48]], 0.035, materials.woodLight));
+  driftwood.add(curvedTrunk("DriftwoodBranchB", [[0.1, 0.11, -0.25], [0.18, 0.2, -0.34], [0.2, 0.26, -0.42]], 0.028, materials.woodLight));
   for (let index = 0; index < 5; index += 1) {
-    const positions = [[-0.58, 0.06, 0.08], [-0.36, 0.05, -0.48], [0.06, 0.045, -0.44], [0.42, 0.06, -0.3], [0.52, 0.045, 0.02]];
-    root.add(mesh(
-      new THREE.DodecahedronGeometry(0.065 + (index % 2) * 0.025, 0),
-      index % 2 ? materials.rockLight : materials.sandLight,
-      `BeachStone_${index}`,
-      positions[index]
+    driftwood.add(mesh(
+      new THREE.TorusGeometry(0.073 - index * 0.006, 0.009, 5, 18, Math.PI * 1.45),
+      materials.trunkDark,
+      `BarkGroove_${index}`,
+      [-0.48 + index * 0.16, 0.13 - index * 0.009, -0.36 + index * 0.025],
+      [Math.PI / 2 + 0.12, 0.16, 0.15]
     ));
   }
-  root.add(mesh(new THREE.TorusGeometry(0.09, 0.026, 6, 14, Math.PI * 1.4), materials.coralPink, "Shell", [0.3, 0.06, -0.5], [Math.PI / 2, 0, 0.3]));
+  root.add(driftwood);
+
+  addPebbleCluster(root, "WestPebbles", [-0.58, 0, -0.06], 1.05);
+  addPebbleCluster(root, "EastPebbles", [0.52, 0, -0.22], 0.82);
+  addPebbleCluster(root, "RearPebbles", [0.2, 0, -0.57], 0.65);
+
+  root.add(mesh(new THREE.TorusGeometry(0.105, 0.026, 8, 22, Math.PI * 1.55), materials.shellRose, "ConchShell", [0.36, 0.055, -0.5], [Math.PI / 2, 0, 0.42]));
+  root.add(mesh(new THREE.ConeGeometry(0.052, 0.14, 12), materials.shellIvory, "SpiralShell", [-0.17, 0.055, -0.53], [0.1, 0, Math.PI / 2], [1, 1, 0.72]));
+  for (let index = 0; index < 4; index += 1) {
+    root.add(mesh(
+      new THREE.TorusGeometry(0.035 + index * 0.009, 0.008, 5, 16, Math.PI * 1.45),
+      index % 2 ? materials.shellRose : materials.shellIvory,
+      `ScallopRidge_${index}`,
+      [0.055, 0.035 + index * 0.004, -0.55 + index * 0.006],
+      [Math.PI / 2, 0, 0.1]
+    ));
+  }
+  root.add(mesh(starfishGeometry(), materials.coralPink, "Starfish", [0.57, 0.045, 0.03], [-Math.PI / 2, 0.14, 0.2]));
+
+  const coral = new THREE.Group();
+  coral.name = "WashedCoral";
+  coral.position.set(-0.55, 0.02, -0.38);
+  for (let index = 0; index < 5; index += 1) {
+    const angle = (index / 5) * Math.PI * 2;
+    const height = 0.11 + (index % 3) * 0.035;
+    coral.add(mesh(new THREE.CylinderGeometry(0.018, 0.03, height, 7), materials.coralGold, `CoralBranch_${index}`, [Math.cos(angle) * 0.045, height / 2, Math.sin(angle) * 0.04], [Math.sin(angle) * 0.25, 0, Math.cos(angle) * 0.28]));
+  }
+  root.add(coral);
+
+  addGrassTuft(root, "DuneGrassWest", [-0.68, 0.01, -0.29], 0.78, [materials.grassDark, materials.grass, materials.sandLight]);
+  addGrassTuft(root, "DuneGrassEast", [0.65, 0.01, -0.39], 0.68, [materials.grass, materials.leafYoung, materials.sandLight]);
+  root.add(curvedTrunk("RopeFragment", [[0.24, 0.025, -0.12], [0.35, 0.035, -0.08], [0.44, 0.025, -0.13], [0.37, 0.025, -0.18]], 0.012, materials.ropeFiber));
+  root.add(mesh(new THREE.DodecahedronGeometry(0.045, 1), materials.seaGlass, "SeaGlass", [-0.34, 0.035, -0.08], [0.2, 0.5, 0.1], [1.2, 0.42, 0.86]));
   mergeMeshesByMaterial(root, "BeachDecor");
   root.userData.assetType = "terrain-decor";
   root.userData.terrain = "beach";
@@ -764,12 +903,92 @@ function createBeachDecor() {
 function createForestDecor() {
   const root = new THREE.Group();
   root.name = "terrain_forest_decor";
-  const treePositions = [[-0.46, 0, -0.22], [0.02, 0, -0.48], [0.46, 0, -0.18]];
-  treePositions.forEach((position, index) => {
-    root.add(mesh(new THREE.CylinderGeometry(0.05, 0.075, 0.36 + index * 0.06, 8), materials.trunk, `ForestTrunk_${index}`, [position[0], 0.2 + index * 0.03, position[2]]));
-    root.add(mesh(new THREE.DodecahedronGeometry(0.21 + index * 0.02, 1), index % 2 ? materials.leaf : materials.leafDark, `ForestCrown_${index}`, [position[0], 0.45 + index * 0.06, position[2]], [0, index * 0.35, 0], [1, 1.08, 1]));
+  const treeData = [
+    { x: -0.47, z: -0.3, height: 0.67, radius: 0.075, lean: -0.08 },
+    { x: 0.02, z: -0.53, height: 0.82, radius: 0.085, lean: 0.05 },
+    { x: 0.48, z: -0.3, height: 0.7, radius: 0.074, lean: 0.08 }
+  ];
+  treeData.forEach(({ x, z, height, radius, lean }, index) => {
+    const tree = new THREE.Group();
+    tree.name = `DetailedForestTree_${index}`;
+    tree.position.set(x, 0, z);
+    tree.add(curvedTrunk(`ForestTrunk_${index}`, [[0, 0.02, 0], [lean * 0.35, height * 0.48, 0.01], [lean, height, 0]], radius, index === 1 ? materials.trunk : materials.trunkLight));
+    tree.add(curvedTrunk(`BarkStripe_${index}`, [[radius * 0.58, 0.05, 0], [radius * 0.48 + lean * 0.2, height * 0.42, 0.01], [lean + radius * 0.3, height * 0.78, 0]], radius * 0.12, materials.trunkDark));
+    for (let rootIndex = 0; rootIndex < 4; rootIndex += 1) {
+      const angle = (rootIndex / 4) * Math.PI * 2 + index * 0.35;
+      tree.add(curvedTrunk(
+        `TreeRoot_${index}_${rootIndex}`,
+        [[0, 0.1, 0], [Math.cos(angle) * 0.09, 0.035, Math.sin(angle) * 0.09], [Math.cos(angle) * 0.19, 0.012, Math.sin(angle) * 0.19]],
+        radius * 0.32,
+        rootIndex % 2 ? materials.trunk : materials.trunkLight
+      ));
+    }
+    for (let branchIndex = 0; branchIndex < 3; branchIndex += 1) {
+      const angle = (branchIndex / 3) * Math.PI * 2 + index;
+      tree.add(curvedTrunk(
+        `ForestBranch_${index}_${branchIndex}`,
+        [[lean * 0.65, height * 0.62, 0], [lean + Math.cos(angle) * 0.13, height * 0.82, Math.sin(angle) * 0.13], [lean + Math.cos(angle) * 0.24, height * 0.9, Math.sin(angle) * 0.24]],
+        radius * 0.48,
+        materials.trunk
+      ));
+    }
+    const crownY = height + 0.08;
+    const crownMats = [materials.leafDark, materials.leaf, materials.leafLight, materials.leafYoung];
+    for (let crownIndex = 0; crownIndex < 8; crownIndex += 1) {
+      const angle = (crownIndex / 8) * Math.PI * 2 + index * 0.24;
+      const ring = crownIndex % 3 === 0 ? 0.07 : 0.16;
+      tree.add(foliageCluster(
+        `ForestCrown_${index}_${crownIndex}`,
+        [lean + Math.cos(angle) * ring, crownY + (crownIndex % 3) * 0.055, Math.sin(angle) * ring],
+        [0.4, 0.31 + (crownIndex % 2) * 0.07, 0.39],
+        crownMats[(crownIndex + index) % crownMats.length],
+        1
+      ));
+    }
+    for (let leafIndex = 0; leafIndex < 6; leafIndex += 1) {
+      const angle = (leafIndex / 6) * Math.PI * 2 + index * 0.4;
+      tree.add(mesh(
+        taperedLeafGeometry(0.18 + (leafIndex % 2) * 0.04, 0.09, 0.055, 6),
+        crownMats[(leafIndex + index) % crownMats.length],
+        `CanopyLeaf_${index}_${leafIndex}`,
+        [lean + Math.cos(angle) * 0.25, crownY - 0.05 + (leafIndex % 3) * 0.05, Math.sin(angle) * 0.25],
+        [-0.08, angle + Math.PI, leafIndex % 2 ? 0.18 : -0.18]
+      ));
+    }
+    root.add(tree);
   });
-  root.add(foliageCluster("ForestBush", [-0.12, 0.12, -0.06], [0.38, 0.2, 0.3], materials.leafLight, 1));
+
+  const fernPositions = [[-0.68, -0.12], [-0.27, -0.48], [0.3, -0.55], [0.67, -0.12]];
+  fernPositions.forEach(([x, z], index) => {
+    const fern = new THREE.Group();
+    fern.name = `Fern_${index}`;
+    fern.position.set(x, 0.01, z);
+    for (let leafIndex = 0; leafIndex < 6; leafIndex += 1) {
+      const angle = (leafIndex / 6) * Math.PI * 2;
+      fern.add(mesh(
+        taperedLeafGeometry(0.2 + (leafIndex % 2) * 0.04, 0.085, 0.075, 7),
+        leafIndex % 2 ? materials.leafLight : materials.leaf,
+        `FernLeaf_${index}_${leafIndex}`,
+        [0, 0.02, 0],
+        [-0.22, angle, 0]
+      ));
+    }
+    root.add(fern);
+  });
+
+  root.add(curvedTrunk("HangingVine", [[-0.08, 0.78, -0.52], [-0.16, 0.58, -0.5], [-0.1, 0.38, -0.47], [-0.16, 0.2, -0.42]], 0.012, materials.grassDark));
+  root.add(curvedTrunk("FallenBranch", [[0.2, 0.045, -0.12], [0.36, 0.065, -0.08], [0.54, 0.04, -0.14]], 0.027, materials.trunkLight));
+
+  const mushroomPositions = [[-0.34, -0.12, 0.72], [0.58, -0.18, 0.56], [0.42, -0.48, 0.48]];
+  mushroomPositions.forEach(([x, z, size], index) => {
+    root.add(mesh(new THREE.CylinderGeometry(0.018 * size, 0.025 * size, 0.09 * size, 8), materials.mushroomStem, `MushroomStem_${index}`, [x, 0.045 * size, z]));
+    root.add(mesh(new THREE.SphereGeometry(0.055 * size, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), materials.mushroomCap, `MushroomCap_${index}`, [x, 0.09 * size, z], [0, index * 0.4, 0], [1, 0.52, 1]));
+  });
+  addFlower(root, "ForestFlowerA", [-0.59, 0, 0.03], materials.flowerCoral, 0.72);
+  addFlower(root, "ForestFlowerB", [0.62, 0, 0.04], materials.flowerYellow, 0.62);
+  addPebbleCluster(root, "MossyStones", [0.52, 0, -0.48], 0.58);
+  root.add(foliageCluster("ForestMossA", [-0.25, 0.025, -0.34], [0.28, 0.06, 0.2], materials.moss, 1));
+  root.add(foliageCluster("ForestMossB", [0.26, 0.02, -0.25], [0.24, 0.05, 0.18], materials.moss, 1));
   mergeMeshesByMaterial(root, "ForestDecor");
   root.userData.assetType = "terrain-decor";
   root.userData.terrain = "forest";
@@ -779,13 +998,62 @@ function createForestDecor() {
 function createMountainDecor() {
   const root = new THREE.Group();
   root.name = "terrain_mountain_decor";
-  root.add(mesh(new THREE.ConeGeometry(0.43, 0.9, 7), materials.rock, "MountainPeak", [-0.22, 0.45, -0.28]));
-  root.add(mesh(new THREE.ConeGeometry(0.2, 0.28, 7), materials.snow, "SnowCap", [-0.22, 0.82, -0.28]));
-  root.add(mesh(new THREE.ConeGeometry(0.28, 0.58, 7), materials.rockLight, "MountainShoulder", [0.3, 0.29, -0.34], [0, 0, -0.06]));
-  for (let index = 0; index < 4; index += 1) {
-    const positions = [[-0.52, 0.08, 0.02], [-0.14, 0.07, -0.02], [0.26, 0.08, 0], [0.52, 0.07, -0.1]];
-    root.add(mesh(new THREE.DodecahedronGeometry(0.09 + index * 0.012, 0), index % 2 ? materials.rock : materials.rockLight, `MountainRock_${index}`, positions[index]));
+  root.add(mesh(new THREE.ConeGeometry(0.48, 0.92, 9, 3), materials.rock, "MountainMass", [-0.23, 0.46, -0.34], [0, -0.12, -0.035], [1, 1, 0.9]));
+  const facePatches = [
+    { points: [[-0.55, 0.13, -0.02], [-0.35, 0.15, 0.02], [-0.4, 0.36, -0.055], [-0.57, 0.29, -0.08]], mat: materials.rockDark },
+    { points: [[-0.34, 0.2, 0.04], [-0.09, 0.18, -0.005], [-0.13, 0.42, -0.075], [-0.31, 0.48, -0.055]], mat: materials.rockWarm },
+    { points: [[-0.08, 0.14, -0.035], [0.07, 0.12, -0.12], [-0.02, 0.34, -0.14], [-0.13, 0.39, -0.075]], mat: materials.rockDark },
+    { points: [[-0.42, 0.42, -0.075], [-0.23, 0.48, -0.035], [-0.28, 0.66, -0.13]], mat: materials.rockLight }
+  ];
+  facePatches.forEach(({ points, mat }, index) => {
+    root.add(mesh(rockFaceGeometry(points), mat, `RockFacePatch_${index}`));
+  });
+  root.add(mesh(new THREE.ConeGeometry(0.19, 0.22, 9), materials.snow, "IrregularSnowCrown", [-0.23, 0.87, -0.34], [0.02, -0.12, -0.04], [1.08, 1, 0.94]));
+  for (let index = 0; index < 5; index += 1) {
+    const angle = (index / 5) * Math.PI * 2;
+    root.add(mesh(
+      new THREE.ConeGeometry(0.065 + (index % 2) * 0.018, 0.2 + (index % 3) * 0.045, 6),
+      index % 2 ? materials.snowShade : materials.snow,
+      `SnowTongue_${index}`,
+      [-0.23 + Math.cos(angle) * 0.15, 0.72 - (index % 2) * 0.05, -0.34 + Math.sin(angle) * 0.13],
+      [Math.sin(angle) * 0.36, angle, Math.cos(angle) * 0.34],
+      [0.62, 1, 0.34]
+    ));
   }
+
+  root.add(mesh(new THREE.ConeGeometry(0.31, 0.62, 8, 2), materials.rockLight, "MountainShoulder", [0.31, 0.31, -0.42], [0.03, 0.28, -0.08], [1, 1, 0.86]));
+  root.add(mesh(rockFaceGeometry([
+    [0.12, 0.15, -0.23],
+    [0.46, 0.16, -0.22],
+    [0.4, 0.36, -0.3],
+    [0.22, 0.4, -0.29]
+  ]), materials.rockWarm, "ShoulderFace"));
+  root.add(mesh(new THREE.ConeGeometry(0.11, 0.13, 8), materials.snowShade, "ShoulderSnow", [0.31, 0.57, -0.42], [0.03, 0.28, -0.08], [1.08, 1, 0.88]));
+  root.add(mesh(new THREE.ConeGeometry(0.22, 0.44, 7, 2), materials.rockDark, "WestRidge", [-0.58, 0.22, -0.26], [-0.04, -0.3, 0.08], [1, 1, 0.8]));
+
+  const screePositions = [
+    [-0.67, 0.02, -0.04], [-0.5, -0.08, 0.03], [-0.34, -0.06, 0.04],
+    [0.02, -0.1, 0.01], [0.28, -0.05, -0.08], [0.51, -0.12, -0.03], [0.68, -0.2, -0.08]
+  ];
+  screePositions.forEach(([x, z], index) => {
+    root.add(mesh(
+      new THREE.DodecahedronGeometry(0.055 + (index % 3) * 0.012, 0),
+      [materials.rockDark, materials.rockLight, materials.rockWarm][index % 3],
+      `ScreeRock_${index}`,
+      [x, 0.032 + (index % 2) * 0.009, z],
+      [index * 0.32, index * 0.51, index * 0.18],
+      [1.1, 0.58, 0.82]
+    ));
+  });
+  for (let index = 0; index < 4; index += 1) {
+    const x = 0.47 + index * 0.045;
+    const z = -0.29 + (index % 2) * 0.055;
+    const height = 0.16 + index * 0.035;
+    root.add(mesh(new THREE.ConeGeometry(0.035 + index * 0.004, height, 5), materials.crystal, `Crystal_${index}`, [x, height / 2, z], [0.04, index * 0.5, index % 2 ? -0.12 : 0.1]));
+  }
+  addGrassTuft(root, "AlpineGrassWest", [-0.62, 0.01, -0.2], 0.55, [materials.grassDark, materials.moss, materials.grass]);
+  addGrassTuft(root, "AlpineGrassEast", [0.65, 0.01, -0.36], 0.48, [materials.grassDark, materials.moss, materials.grass]);
+  addFlower(root, "AlpineFlower", [0.68, 0, -0.12], materials.flowerCoral, 0.48);
   mergeMeshesByMaterial(root, "MountainDecor");
   root.userData.assetType = "terrain-decor";
   root.userData.terrain = "mountain";

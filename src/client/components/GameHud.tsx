@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
+  BookOpen, Bot, ChevronRight, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
   LogOut, Navigation, RotateCcw, Shield, Users, Waves
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
@@ -11,11 +11,13 @@ import { socket } from "../socket";
 export function GameHud({
   room,
   clientId,
-  role
+  role,
+  onOpenRules
 }: {
   room: PublicRoomState;
   clientId: string | null;
   role: Role | null;
+  onOpenRules: () => void;
 }) {
   const {
     selectedExplorerId, selectedRaftId, selectedCreatureId,
@@ -124,6 +126,9 @@ export function GameHud({
         </div>
         <button className="icon-button game-exit" title="退出房间" aria-label="退出房间" onClick={leaveGame}>
           <LogOut size={18} />
+        </button>
+        <button className="icon-button game-rules" title="查看规则" aria-label="查看规则" onClick={onOpenRules}>
+          <BookOpen size={18} />
         </button>
       </header>
 

@@ -24,9 +24,9 @@ const assets: Asset[] = [
   { file: "whirlpool.glb", label: "漩涡", note: "多层泡沫环与漏斗水体，包含循环旋转动画。" },
   { file: "coral-reef.glb", label: "珊瑚礁", note: "三色珊瑚、海草与沙质基座，适合海域重复实例化。" },
   { file: "floating-debris.glb", label: "漂浮残骸", note: "断木、木板、绳圈和木桶组合，包含轻微漂移动画。" },
-  { file: "terrain-beach.glb", label: "海滩套件", note: "沙地、漂木、贝壳和石块，适配六边地形。" },
-  { file: "terrain-forest.glb", label: "森林套件", note: "三株错落树木与灌木，保持俯视可读性。" },
-  { file: "terrain-mountain.glb", label: "山地套件", note: "主峰、雪顶、侧峰和散落岩块，适配六边地形。" }
+  { file: "terrain-beach.glb", label: "海滩套件", note: "升级版：漂木纹理、枝杈、贝壳、海星、珊瑚、卵石、海玻璃与滨海草，前中部保留自然站位。" },
+  { file: "terrain-forest.glb", label: "森林套件", note: "升级版：外露根系、树皮层次、分层树冠、蕨类、藤蔓、蘑菇、花朵与苔石，前中部保持通透。" },
+  { file: "terrain-mountain.glb", label: "山地套件", note: "升级版：多层岩壁、不规则积雪、侧脊、碎石坡、晶簇与高山植物，兼顾细节和单位可读性。" }
 ];
 
 document.querySelector<HTMLDivElement>("#preview-root")!.innerHTML = `
@@ -222,7 +222,13 @@ async function loadAsset(index: number) {
   scene.add(model);
 
   const targetY = Math.max(displayHeight * 0.45, 0.5);
-  controls.target.set(0, targetY, 0);
+  const terrainAssets = new Set([
+    "terrain-beach.glb",
+    "terrain-forest.glb",
+    "terrain-mountain.glb"
+  ]);
+  const isTerrain = terrainAssets.has(asset.file);
+  controls.target.set(0, isTerrain ? Math.max(displayHeight * 0.28, 0.35) : targetY, 0);
   const displayWidth = (flatAssets.has(asset.file)
     ? Math.hypot(size.x, size.z)
     : Math.max(size.x, size.z)) * scale;
@@ -237,8 +243,10 @@ async function loadAsset(index: number) {
     : horizontalAssets.has(asset.file)
       ? (isMobile ? 4.8 : 4.1)
       : (isMobile ? 4.6 : 3.8);
-  const distance = Math.max(fittedDistance, minimumDistance);
-  const direction = new THREE.Vector3(0.56, 0.34, 0.76).normalize();
+  const distance = Math.max(fittedDistance, minimumDistance) * (isTerrain ? 1.16 : 1);
+  const direction = isTerrain
+    ? new THREE.Vector3(0.48, 0.82, 0.68).normalize()
+    : new THREE.Vector3(0.56, 0.34, 0.76).normalize();
   camera.position.copy(controls.target).add(direction.multiplyScalar(distance));
   controls.update();
 

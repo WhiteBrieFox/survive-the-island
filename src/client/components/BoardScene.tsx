@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ContactShadows, Float, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Color, Group, Mesh, type Material, type Object3D } from "three";
+import { Color, Group, Mesh, Vector3, type Material, type Object3D } from "three";
 import { useShallow } from "zustand/react/shallow";
 import type { CreatureView, ExplorerView, PlayerColor, PublicRoomState, RaftView, Terrain, TileView, WaterSpaceView } from "../../shared/types";
 import { areAdjacent, createIslandCoords, hexToWorld } from "../../shared/hex";
@@ -45,6 +45,61 @@ type UnitPlacement = {
   x: number;
   z: number;
 };
+
+function AnimatedMover({
+  position,
+  arc = 0.16,
+  duration = 0.62,
+  children
+}: {
+  position: [number, number, number];
+  arc?: number;
+  duration?: number;
+  children: ReactNode;
+}) {
+  const group = useRef<Group>(null);
+  const current = useRef(new Vector3(...position));
+  const start = useRef(new Vector3(...position));
+  const target = useRef(new Vector3(...position));
+  const elapsed = useRef(duration);
+  const initialized = useRef(false);
+
+  useLayoutEffect(() => {
+    const next = new Vector3(...position);
+    if (!initialized.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      initialized.current = true;
+      current.current.copy(next);
+      start.current.copy(next);
+      target.current.copy(next);
+      elapsed.current = duration;
+      group.current?.position.copy(next);
+      return;
+    }
+    start.current.copy(current.current);
+    target.current.copy(next);
+    elapsed.current = 0;
+  }, [duration, position[0], position[1], position[2]]);
+
+  useFrame((_, delta) => {
+    if (!group.current || elapsed.current >= duration) return;
+    elapsed.current = Math.min(duration, elapsed.current + delta);
+    const linear = elapsed.current / duration;
+    const eased = linear * linear * (3 - 2 * linear);
+    current.current.lerpVectors(start.current, target.current, eased);
+    const horizontalDistance = Math.hypot(
+      target.current.x - start.current.x,
+      target.current.z - start.current.z
+    );
+    current.current.y += Math.sin(linear * Math.PI) * Math.min(arc, horizontalDistance * 0.12);
+    group.current.position.copy(current.current);
+  });
+
+  return (
+    <group ref={group} position={[current.current.x, current.current.y, current.current.z]}>
+      {children}
+    </group>
+  );
+}
 
 const modelPath = (name: string) => `/assets/models-preview/${name}.glb`;
 
@@ -324,40 +379,44 @@ function Explorer({
       rotationIntensity={0}
       floatIntensity={selected ? 0.16 : explorer.swimming ? 0.06 : explorer.raftId ? 0.03 : 0}
     >
-      <group
+      <AnimatedMover
         position={[x + offsetX, explorer.raftId ? 0.23 : terrainHeight, z + offsetZ]}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick();
-        }}
-        scale={selected ? 1.18 : 1}
+        arc={explorer.swimming ? 0.08 : 0.18}
       >
-        <AssetModel name="explorer" color={color} rotation={modelRotation} scale={modelScale} />
-        {explorer.swimming && (
-          <group position-y={0.02}>
-            <mesh rotation-x={-Math.PI / 2}>
-              <ringGeometry args={[0.24, 0.29, 32]} />
-              <meshBasicMaterial color="#c9fbf4" transparent opacity={0.8} depthWrite={false} />
+        <group
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+          }}
+          scale={selected ? 1.18 : 1}
+        >
+          <AssetModel name="explorer" color={color} rotation={modelRotation} scale={modelScale} />
+          {explorer.swimming && (
+            <group position-y={0.02}>
+              <mesh rotation-x={-Math.PI / 2}>
+                <ringGeometry args={[0.24, 0.29, 32]} />
+                <meshBasicMaterial color="#c9fbf4" transparent opacity={0.8} depthWrite={false} />
+              </mesh>
+              <mesh rotation-x={-Math.PI / 2}>
+                <ringGeometry args={[0.36, 0.39, 32]} />
+                <meshBasicMaterial color="#8de6df" transparent opacity={0.48} depthWrite={false} />
+              </mesh>
+            </group>
+          )}
+          {!explorer.raftId && !explorer.swimming && (
+            <mesh rotation-x={-Math.PI / 2} position-y={0.015}>
+              <circleGeometry args={[0.22, 24]} />
+              <meshBasicMaterial color={color} transparent opacity={0.72} />
             </mesh>
-            <mesh rotation-x={-Math.PI / 2}>
-              <ringGeometry args={[0.36, 0.39, 32]} />
-              <meshBasicMaterial color="#8de6df" transparent opacity={0.48} depthWrite={false} />
+          )}
+          {selected && (
+            <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+              <ringGeometry args={[0.28, 0.36, 24]} />
+              <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
             </mesh>
-          </group>
-        )}
-        {!explorer.raftId && !explorer.swimming && (
-          <mesh rotation-x={-Math.PI / 2} position-y={0.015}>
-            <circleGeometry args={[0.22, 24]} />
-            <meshBasicMaterial color={color} transparent opacity={0.72} />
-          </mesh>
-        )}
-        {selected && (
-          <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
-            <ringGeometry args={[0.28, 0.36, 24]} />
-            <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
-          </mesh>
-        )}
-      </group>
+          )}
+        </group>
+      </AnimatedMover>
     </Float>
   );
 }
@@ -397,20 +456,21 @@ function SunkenTileTarget({ tile, highlighted, onClick }: { tile: TileView; high
 function RaftPiece({ raft, space, selected, onClick }: { raft: RaftView; space: TileView | WaterSpaceView; selected: boolean; onClick: () => void }) {
   const { x, z } = hexToWorld(space);
   return (
-    <group
-      position={[x, -0.02, z]}
-      rotation-y={0.35}
-      scale={selected ? 1.12 : 1}
-      onClick={(event) => { event.stopPropagation(); onClick(); }}
-    >
-      <AssetModel name="raft" scale={0.72} />
-      {selected && (
-        <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
-          <ringGeometry args={[0.68, 0.82, 24]} />
-          <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
-        </mesh>
-      )}
-    </group>
+    <AnimatedMover position={[x, -0.02, z]} arc={0.08} duration={0.72}>
+      <group
+        rotation-y={0.35}
+        scale={selected ? 1.12 : 1}
+        onClick={(event) => { event.stopPropagation(); onClick(); }}
+      >
+        <AssetModel name="raft" scale={0.72} />
+        {selected && (
+          <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+            <ringGeometry args={[0.68, 0.82, 24]} />
+            <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
+          </mesh>
+        )}
+      </group>
+    </AnimatedMover>
   );
 }
 
@@ -448,29 +508,34 @@ function CreaturePiece({
   }
   return (
     <Float speed={1.8} floatIntensity={0.12} rotationIntensity={0.08}>
-      <group
+      <AnimatedMover
         position={[x + settings.x, settings.y, z + settings.z]}
-        scale={selected ? 1.2 : 1}
-        onClick={(event) => { event.stopPropagation(); onClick(); }}
+        arc={creature.type === "kaiju" ? 0.22 : 0.1}
+        duration={creature.type === "kaiju" ? 0.78 : 0.66}
       >
-        <AssetModel
-          name={settings.name}
-          rotation={[0, settings.rotation + tileVariant(creature.id, 8) * Math.PI / 4, 0]}
-          scale={settings.scale}
-        />
-        {creature.type === "kaiju" && (
-          <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
-            <circleGeometry args={[0.38, 28]} />
-            <meshBasicMaterial color="#173d70" transparent opacity={0.55} />
-          </mesh>
-        )}
-        {selected && (
-          <mesh rotation-x={-Math.PI / 2} position-y={-0.04}>
-            <ringGeometry args={[0.5, 0.64, 28]} />
-            <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
-          </mesh>
-        )}
-      </group>
+        <group
+          scale={selected ? 1.2 : 1}
+          onClick={(event) => { event.stopPropagation(); onClick(); }}
+        >
+          <AssetModel
+            name={settings.name}
+            rotation={[0, settings.rotation + tileVariant(creature.id, 8) * Math.PI / 4, 0]}
+            scale={settings.scale}
+          />
+          {creature.type === "kaiju" && (
+            <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+              <circleGeometry args={[0.38, 28]} />
+              <meshBasicMaterial color="#173d70" transparent opacity={0.55} />
+            </mesh>
+          )}
+          {selected && (
+            <mesh rotation-x={-Math.PI / 2} position-y={-0.04}>
+              <ringGeometry args={[0.5, 0.64, 28]} />
+              <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
+            </mesh>
+          )}
+        </group>
+      </AnimatedMover>
     </Float>
   );
 }

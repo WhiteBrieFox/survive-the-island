@@ -305,6 +305,24 @@ button:disabled {
   font-size: 12px;
 }
 
+.rules-entry-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 16px;
+  padding: 0;
+  color: #d7e8e5;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rules-entry-button:hover {
+  color: white;
+}
+
 .entry-meta span,
 .lobby-status span,
 .round-readout span,
@@ -445,6 +463,17 @@ button:disabled {
   font-size: 12px;
 }
 
+.lobby-footer-actions {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.lobby-footer-actions .quiet-command {
+  margin-right: 0;
+  margin-left: 0;
+}
+
 .game-topbar {
   position: absolute;
   z-index: 6;
@@ -517,9 +546,344 @@ button:disabled {
   background: #dce3da;
 }
 
+.game-rules {
+  position: absolute;
+  top: 9px;
+  right: 54px;
+  color: #42666a;
+  background: #dce3da;
+}
+
+.game-rules:hover {
+  color: white;
+  background: #247c76;
+}
+
 .game-exit:hover {
   color: white;
   background: #b64b43;
+}
+
+.rules-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 24, 30, 0.72);
+  backdrop-filter: blur(9px);
+}
+
+.rules-dialog {
+  width: min(980px, 100%);
+  max-height: min(880px, calc(100vh - 48px));
+  overflow: auto;
+  color: var(--ink);
+  background: #eff3e9;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 8px;
+  box-shadow: 0 30px 90px rgba(0, 14, 19, 0.48);
+}
+
+.rules-header {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 13px 22px;
+  background: rgba(239, 243, 233, 0.96);
+  border-bottom: 1px solid #c8d2c6;
+  backdrop-filter: blur(12px);
+}
+
+.rules-header h2 {
+  font-size: 22px;
+}
+
+.rules-hero {
+  position: relative;
+  min-height: 250px;
+  overflow: hidden;
+}
+
+.rules-hero img {
+  display: block;
+  width: 100%;
+  height: 310px;
+  object-fit: cover;
+  object-position: center 58%;
+}
+
+.rules-hero::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, rgba(5, 37, 45, 0.88), rgba(5, 37, 45, 0.06) 65%);
+}
+
+.rules-hero-copy {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 28px;
+  display: grid;
+  width: min(360px, calc(100% - 56px));
+  gap: 8px;
+  color: white;
+  transform: translateY(-50%);
+}
+
+.rules-hero-copy strong {
+  font-size: 30px;
+  line-height: 1.12;
+}
+
+.rules-hero-copy span {
+  color: #d4e8e3;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rules-tabs {
+  position: sticky;
+  z-index: 2;
+  top: 72px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 8px 16px;
+  background: #dfe8de;
+  border-bottom: 1px solid #c2cec1;
+}
+
+.rules-tabs button {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #476469;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid #c6d1c5;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.rules-tabs button:last-child {
+  border-right: 0;
+}
+
+.rules-tabs button.active {
+  color: white;
+  background: #176f68;
+  border-color: #176f68;
+}
+
+.rules-content {
+  padding: 24px;
+}
+
+.rules-section {
+  display: grid;
+  gap: 22px;
+}
+
+.rules-section h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.rules-section p {
+  color: #516a6d;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.rules-lead {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.rules-lead > svg {
+  color: #b64b43;
+}
+
+.turn-timeline {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn-timeline li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid #ccd6ca;
+}
+
+.turn-timeline li:last-child {
+  border-bottom: 0;
+}
+
+.turn-timeline b {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: white;
+  background: #238079;
+  border-radius: 50%;
+}
+
+.turn-timeline li > div {
+  display: grid;
+  gap: 3px;
+}
+
+.turn-timeline span {
+  color: #5d7375;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rule-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 15px;
+  color: #31575b;
+  background: #d7e8e0;
+  border-left: 4px solid #278077;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.rule-callout svg {
+  flex: 0 0 auto;
+}
+
+.rule-callout.warning {
+  background: #f3e5bd;
+  border-left-color: #c28a32;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rules-grid article {
+  min-width: 0;
+  padding: 16px;
+  background: #f8faf4;
+  border: 1px solid #cbd6c9;
+  border-radius: 7px;
+}
+
+.rules-grid article > svg {
+  margin-bottom: 10px;
+  color: #1e7973;
+}
+
+.creature-rules {
+  gap: 12px;
+}
+
+.creature-rule {
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  min-height: 112px;
+  align-items: stretch;
+  overflow: hidden;
+  background: #f8faf4;
+  border: 1px solid #cbd6c9;
+  border-radius: 7px;
+}
+
+.creature-rule > div:last-child {
+  align-self: center;
+  padding: 16px 18px;
+}
+
+.creature-rule-art {
+  display: grid;
+  place-items: end start;
+  padding: 14px;
+  color: white;
+  font-size: 18px;
+  font-weight: 800;
+  background-position: center;
+  background-size: cover;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.shark-rule .creature-rule-art {
+  background-image: linear-gradient(rgba(0, 76, 91, 0.1), rgba(0, 54, 66, 0.7)), url("/assets/generated/main-menu-key-art.png");
+  background-position: 10% 88%;
+  background-size: 470%;
+}
+
+.serpent-rule .creature-rule-art {
+  background-image: linear-gradient(rgba(89, 31, 29, 0.08), rgba(83, 25, 26, 0.72)), url("/assets/generated/main-menu-key-art.png");
+  background-position: 3% 35%;
+  background-size: 450%;
+}
+
+.kaiju-rule .creature-rule-art {
+  background-image: linear-gradient(rgba(15, 45, 77, 0.08), rgba(14, 40, 65, 0.72)), url("/assets/generated/main-menu-key-art.png");
+  background-position: 97% 28%;
+  background-size: 430%;
+}
+
+.terrain-order {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.terrain-step {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: center;
+  gap: 2px 10px;
+  min-height: 78px;
+  padding: 12px;
+  color: #17383c;
+  border-radius: 7px;
+}
+
+.terrain-step b {
+  grid-row: 1 / 3;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: white;
+  background: rgba(18, 54, 57, 0.72);
+  border-radius: 50%;
+}
+
+.terrain-step span {
+  font-size: 11px;
+}
+
+.beach-step { background: #ead18e; }
+.forest-step { background: #9dc985; }
+.mountain-step { background: #b7b9b5; }
+
+.ability-rules article strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #1d625f;
 }
 
 .score-panel,
@@ -980,6 +1344,11 @@ button:disabled {
     right: 9px;
   }
 
+  .game-rules {
+    top: 10px;
+    right: 50px;
+  }
+
   .turn-readout {
     padding-right: 48px;
   }
@@ -1070,5 +1439,72 @@ button:disabled {
 
   .ability-copy small {
     display: none;
+  }
+
+  .rules-backdrop {
+    padding: 0;
+  }
+
+  .rules-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .rules-header {
+    min-height: 64px;
+    padding: 10px 12px 10px 16px;
+  }
+
+  .rules-header h2 {
+    font-size: 18px;
+  }
+
+  .rules-hero {
+    min-height: 200px;
+  }
+
+  .rules-hero img {
+    height: 230px;
+  }
+
+  .rules-hero-copy {
+    left: 18px;
+    width: min(280px, calc(100% - 36px));
+  }
+
+  .rules-hero-copy strong {
+    font-size: 24px;
+  }
+
+  .rules-tabs {
+    top: 64px;
+    padding: 6px;
+    overflow-x: auto;
+    grid-template-columns: repeat(4, minmax(118px, 1fr));
+  }
+
+  .rules-tabs button {
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .rules-content {
+    padding: 18px 14px 28px;
+  }
+
+  .rules-grid,
+  .terrain-order {
+    grid-template-columns: 1fr;
+  }
+
+  .creature-rule {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .creature-rule > div:last-child {
+    padding: 13px;
   }
 }

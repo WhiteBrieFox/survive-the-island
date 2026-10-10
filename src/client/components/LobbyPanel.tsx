@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bot, Check, Copy, Eye, LogOut, Play, Plus, Radio, Trash2, Users } from "lucide-react";
+import { BookOpen, Bot, Check, Copy, Eye, LogOut, Play, Plus, Radio, Trash2, Users } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { AIDifficulty, PublicRoomState, Role } from "../../shared/types";
 import { useGameStore } from "../gameStore";
@@ -8,11 +8,13 @@ import { socket } from "../socket";
 export function LobbyPanel({
   room,
   clientId,
-  role
+  role,
+  onOpenRules
 }: {
   room: PublicRoomState;
   clientId: string | null;
   role: Role | null;
+  onOpenRules: () => void;
 }) {
   const { showNotice, reset } = useGameStore(useShallow((state) => ({
     showNotice: state.showNotice,
@@ -131,10 +133,16 @@ export function LobbyPanel({
         )}
       </div>
 
-      <button className="quiet-command" onClick={leave}>
-        <LogOut size={16} />
-        离开房间
-      </button>
+      <div className="lobby-footer-actions">
+        <button className="quiet-command" onClick={onOpenRules}>
+          <BookOpen size={16} />
+          查看规则
+        </button>
+        <button className="quiet-command" onClick={leave}>
+          <LogOut size={16} />
+          离开房间
+        </button>
+      </div>
     </section>
   );
 }
