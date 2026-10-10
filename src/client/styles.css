@@ -1269,6 +1269,19 @@ button:disabled {
   margin: 0;
 }
 
+.audio-unlock {
+  width: 100%;
+  min-height: 38px;
+  margin-bottom: 9px;
+  color: white;
+  background: #1f7773;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .audio-popover label {
   grid-template-columns: 54px 1fr;
   align-items: center;
