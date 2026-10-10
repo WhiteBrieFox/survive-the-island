@@ -54,8 +54,8 @@
     },
     {
       "file": "fire-dragon.glb",
-      "triangles": 4804,
-      "meshes": 12,
+      "triangles": 5556,
+      "meshes": 13,
       "animations": [
         "GuardIdle"
       ]

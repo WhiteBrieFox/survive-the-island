@@ -63,6 +63,7 @@ const materials = {
   dragonDark: material("DragonDark", "#6e2027", 0.68),
   dragonBelly: material("DragonGoldBelly", "#e39b42", 0.66),
   dragonMembrane: material("DragonWingMembrane", "#e55d35", 0.64),
+  dragonEye: material("DragonAmberEye", "#ffc247", 0.3),
   ember: material("Ember", "#ffb238", 0.3),
   serpent: material("SerpentCrimson", "#c74839", 0.56),
   serpentDark: material("SerpentDark", "#7f2431", 0.66),
@@ -385,9 +386,39 @@ function createFireDragon() {
   body.add(mesh(new THREE.SphereGeometry(0.34, 20, 14), materials.dragon, "DragonHead", [0, 1.52, 0.38], [-0.12, 0, 0], [0.95, 0.75, 1.15]));
   body.add(mesh(new THREE.SphereGeometry(0.27, 18, 12), materials.dragonBelly, "DragonMuzzle", [0, 1.39, 0.67], [0, 0, 0], [0.95, 0.48, 0.75]));
   body.add(mesh(new THREE.SphereGeometry(0.24, 18, 12), materials.dragonBelly, "DragonChest", [0, 0.93, 0.36], [0, 0, 0], [0.92, 1.48, 0.34]));
-  addEyes(body, 1.62, 0.65, 0.13, 0.88);
 
   for (const side of [-1, 1]) {
+    body.add(mesh(
+      new THREE.SphereGeometry(0.064, 14, 10),
+      materials.white,
+      `DragonEyeWhite_${side}`,
+      [side * 0.145, 1.63, 0.72],
+      [0, 0, 0],
+      [0.9, 1.08, 0.58]
+    ));
+    body.add(mesh(
+      new THREE.SphereGeometry(0.043, 12, 9),
+      materials.dragonEye,
+      `DragonAmberIris_${side}`,
+      [side * 0.145, 1.63, 0.754],
+      [0, 0, 0],
+      [0.82, 1, 0.48]
+    ));
+    body.add(mesh(
+      new THREE.SphereGeometry(0.019, 10, 8),
+      materials.eye,
+      `DragonPupil_${side}`,
+      [side * 0.145, 1.63, 0.775],
+      [0, 0, 0],
+      [0.58, 1.18, 0.38]
+    ));
+    body.add(mesh(
+      new THREE.BoxGeometry(0.15, 0.035, 0.045),
+      materials.dragonDark,
+      `DragonBrow_${side}`,
+      [side * 0.145, 1.72, 0.708],
+      [0.08, side * -0.08, side * -0.16]
+    ));
     body.add(mesh(new THREE.ConeGeometry(0.075, 0.36, 8), materials.horn, `DragonHorn_${side}`, [side * 0.18, 1.87, 0.2], [-0.4, 0, side * -0.34]));
     body.add(capsule(0.11, 0.4, materials.dragon, `DragonLeg_${side}`, [side * 0.28, 0.47, 0.12], [0.18, 0, side * -0.12]));
     body.add(mesh(new THREE.SphereGeometry(0.15, 12, 8), materials.dragonDark, `DragonFoot_${side}`, [side * 0.31, 0.16, 0.3], [0, 0, 0], [1.18, 0.55, 1.42]));
