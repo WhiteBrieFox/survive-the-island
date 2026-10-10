@@ -22,12 +22,6 @@ const terrainColor: Record<Terrain, string> = {
   mountain: "#7d7b82"
 };
 
-const terrainPadColor: Record<Terrain, string> = {
-  beach: "#f0d890",
-  forest: "#6caf72",
-  mountain: "#98979c"
-};
-
 const landUnitSlots: Array<[number, number]> = [
   [0.52, 0.46],
   [-0.02, 0.74],
@@ -171,23 +165,23 @@ function Ocean() {
 function TerrainDetails({ terrain, tileId }: { terrain: Terrain; tileId: string }) {
   if (terrain === "forest") {
     return (
-      <group position={[-0.36, 0.2, -0.4]}>
-        <AssetModel name="terrain-forest" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.6} />
+      <group position={[-0.12, 0.2, -0.1]}>
+        <AssetModel name="terrain-forest" rotation={[0, (tileVariant(tileId, 3) - 1) * 0.12, 0]} scale={0.82} />
       </group>
     );
   }
   if (terrain === "mountain") {
     return (
-      <group position={[-0.36, 0.28, -0.4]}>
-        <AssetModel name="terrain-mountain" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.62} />
+      <group position={[-0.08, 0.28, -0.08]}>
+        <AssetModel name="terrain-mountain" rotation={[0, (tileVariant(tileId, 3) - 1) * 0.12, 0]} scale={0.84} />
       </group>
     );
   }
   return (
-    <group position={[-0.34, 0.2, -0.38]}>
-      <AssetModel name="terrain-beach" rotation={[0, tileVariant(tileId, 6) * Math.PI / 3, 0]} scale={0.66} />
+    <group position={[-0.1, 0.2, -0.08]}>
+      <AssetModel name="terrain-beach" rotation={[0, (tileVariant(tileId, 3) - 1) * 0.14, 0]} scale={0.84} />
       {tileVariant(tileId, 4) === 0 && (
-        <AssetModel name="tree-palm" position={[-0.14, 0.06, -0.16]} rotation={[0, 0.6, 0]} scale={0.18} />
+        <AssetModel name="tree-palm" position={[-0.34, 0.04, -0.36]} rotation={[0, 0.6, 0]} scale={0.16} />
       )}
     </group>
   );
@@ -261,7 +255,7 @@ function Tile({
       }}
     >
       <mesh castShadow receiveShadow scale-y={hovered || selected ? 1.08 : 1}>
-        <cylinderGeometry args={[1.06, 1.1, tile.terrain === "mountain" ? 0.5 : 0.38, 6]} />
+        <cylinderGeometry args={[1.09, 1.12, tile.terrain === "mountain" ? 0.5 : 0.38, 6]} />
         <meshStandardMaterial
           color={terrainColor[tile.terrain]}
           roughness={0.82}
@@ -270,18 +264,10 @@ function Tile({
         />
       </mesh>
       <mesh position-y={tile.terrain === "mountain" ? -0.25 : -0.19} receiveShadow>
-        <cylinderGeometry args={[1.1, 0.98, 0.18, 6]} />
+        <cylinderGeometry args={[1.12, 1.02, 0.18, 6]} />
         <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
       </mesh>
       <TerrainDetails terrain={tile.terrain} tileId={tile.id} />
-      <mesh
-        position={[0.36, tile.terrain === "mountain" ? 0.265 : 0.205, 0.38]}
-        rotation-x={-Math.PI / 2}
-        receiveShadow
-      >
-        <circleGeometry args={[0.52, 6]} />
-        <meshStandardMaterial color={terrainPadColor[tile.terrain]} roughness={0.92} />
-      </mesh>
       {(highlighted || selected) && (
         <mesh rotation-x={-Math.PI / 2} position-y={0.28}>
           <ringGeometry args={[0.72, 0.86, 6]} />

@@ -7,7 +7,7 @@ export const hexDistance = (a: HexCoord, b: HexCoord) =>
 
 export const areAdjacent = (a: HexCoord, b: HexCoord) => hexDistance(a, b) === 1;
 
-export const hexToWorld = ({ q, r }: HexCoord, size = 1.16) => ({
+export const hexToWorld = ({ q, r }: HexCoord, size = 1.12) => ({
   x: size * Math.sqrt(3) * (q + r / 2),
   z: size * 1.5 * r
 });

@@ -744,13 +744,17 @@ function createFloatingDebris() {
 function createBeachDecor() {
   const root = new THREE.Group();
   root.name = "terrain_beach_decor";
-  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.12, 12), materials.sand, "SandPatch", [0, 0.06, 0]));
-  root.add(curvedTrunk("Driftwood", [[-0.52, 0.13, -0.2], [-0.1, 0.17, -0.06], [0.34, 0.14, 0.08]], 0.065, materials.woodLight));
+  root.add(curvedTrunk("Driftwood", [[-0.5, 0.07, -0.28], [-0.16, 0.11, -0.18], [0.18, 0.08, -0.08]], 0.055, materials.woodLight));
   for (let index = 0; index < 5; index += 1) {
-    const angle = index * 1.17;
-    root.add(mesh(new THREE.DodecahedronGeometry(0.07 + (index % 2) * 0.03, 0), index % 2 ? materials.rockLight : materials.sandLight, `BeachStone_${index}`, [Math.cos(angle) * 0.58, 0.14, Math.sin(angle) * 0.48]));
+    const positions = [[-0.58, 0.06, 0.08], [-0.36, 0.05, -0.48], [0.06, 0.045, -0.44], [0.42, 0.06, -0.3], [0.52, 0.045, 0.02]];
+    root.add(mesh(
+      new THREE.DodecahedronGeometry(0.065 + (index % 2) * 0.025, 0),
+      index % 2 ? materials.rockLight : materials.sandLight,
+      `BeachStone_${index}`,
+      positions[index]
+    ));
   }
-  root.add(mesh(new THREE.TorusGeometry(0.1, 0.03, 6, 14, Math.PI * 1.4), materials.coralPink, "Shell", [0.35, 0.15, -0.34], [Math.PI / 2, 0, 0.3]));
+  root.add(mesh(new THREE.TorusGeometry(0.09, 0.026, 6, 14, Math.PI * 1.4), materials.coralPink, "Shell", [0.3, 0.06, -0.5], [Math.PI / 2, 0, 0.3]));
   mergeMeshesByMaterial(root, "BeachDecor");
   root.userData.assetType = "terrain-decor";
   root.userData.terrain = "beach";
@@ -760,13 +764,12 @@ function createBeachDecor() {
 function createForestDecor() {
   const root = new THREE.Group();
   root.name = "terrain_forest_decor";
-  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.12, 12), materials.grassDark, "ForestFloor", [0, 0.06, 0]));
-  const treePositions = [[-0.42, 0, -0.14], [0.36, 0, -0.12], [0.02, 0, 0.42]];
+  const treePositions = [[-0.46, 0, -0.22], [0.02, 0, -0.48], [0.46, 0, -0.18]];
   treePositions.forEach((position, index) => {
-    root.add(mesh(new THREE.CylinderGeometry(0.055, 0.08, 0.4 + index * 0.08, 8), materials.trunk, `ForestTrunk_${index}`, [position[0], 0.28 + index * 0.04, position[2]]));
-    root.add(mesh(new THREE.DodecahedronGeometry(0.24 + index * 0.025, 1), index % 2 ? materials.leaf : materials.leafDark, `ForestCrown_${index}`, [position[0], 0.58 + index * 0.08, position[2]], [0, index * 0.35, 0], [1, 1.12, 1]));
+    root.add(mesh(new THREE.CylinderGeometry(0.05, 0.075, 0.36 + index * 0.06, 8), materials.trunk, `ForestTrunk_${index}`, [position[0], 0.2 + index * 0.03, position[2]]));
+    root.add(mesh(new THREE.DodecahedronGeometry(0.21 + index * 0.02, 1), index % 2 ? materials.leaf : materials.leafDark, `ForestCrown_${index}`, [position[0], 0.45 + index * 0.06, position[2]], [0, index * 0.35, 0], [1, 1.08, 1]));
   });
-  root.add(foliageCluster("ForestBush", [-0.02, 0.18, -0.35], [0.46, 0.26, 0.38], materials.leafLight, 1));
+  root.add(foliageCluster("ForestBush", [-0.12, 0.12, -0.06], [0.38, 0.2, 0.3], materials.leafLight, 1));
   mergeMeshesByMaterial(root, "ForestDecor");
   root.userData.assetType = "terrain-decor";
   root.userData.terrain = "forest";
@@ -776,12 +779,12 @@ function createForestDecor() {
 function createMountainDecor() {
   const root = new THREE.Group();
   root.name = "terrain_mountain_decor";
-  root.add(mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.12, 12), materials.rockLight, "MountainBase", [0, 0.06, 0]));
-  root.add(mesh(new THREE.ConeGeometry(0.5, 1.05, 7), materials.rock, "MountainPeak", [-0.18, 0.58, 0]));
-  root.add(mesh(new THREE.ConeGeometry(0.24, 0.32, 7), materials.snow, "SnowCap", [-0.18, 1.01, 0]));
-  root.add(mesh(new THREE.ConeGeometry(0.33, 0.72, 7), materials.rockLight, "MountainShoulder", [0.34, 0.42, 0.12], [0, 0, -0.06]));
+  root.add(mesh(new THREE.ConeGeometry(0.43, 0.9, 7), materials.rock, "MountainPeak", [-0.22, 0.45, -0.28]));
+  root.add(mesh(new THREE.ConeGeometry(0.2, 0.28, 7), materials.snow, "SnowCap", [-0.22, 0.82, -0.28]));
+  root.add(mesh(new THREE.ConeGeometry(0.28, 0.58, 7), materials.rockLight, "MountainShoulder", [0.3, 0.29, -0.34], [0, 0, -0.06]));
   for (let index = 0; index < 4; index += 1) {
-    root.add(mesh(new THREE.DodecahedronGeometry(0.1 + index * 0.015, 0), index % 2 ? materials.rock : materials.rockLight, `MountainRock_${index}`, [-0.52 + index * 0.31, 0.18, 0.48 - index * 0.12]));
+    const positions = [[-0.52, 0.08, 0.02], [-0.14, 0.07, -0.02], [0.26, 0.08, 0], [0.52, 0.07, -0.1]];
+    root.add(mesh(new THREE.DodecahedronGeometry(0.09 + index * 0.012, 0), index % 2 ? materials.rock : materials.rockLight, `MountainRock_${index}`, positions[index]));
   }
   mergeMeshesByMaterial(root, "MountainDecor");
   root.userData.assetType = "terrain-decor";

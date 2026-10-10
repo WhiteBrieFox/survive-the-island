@@ -116,19 +116,19 @@
     },
     {
       "file": "terrain-beach.glb",
-      "triangles": 612,
-      "meshes": 5,
+      "triangles": 564,
+      "meshes": 4,
       "animations": []
     },
     {
       "file": "terrain-forest.glb",
-      "triangles": 656,
-      "meshes": 5,
+      "triangles": 608,
+      "meshes": 4,
       "animations": []
     },
     {
       "file": "terrain-mountain.glb",
-      "triangles": 234,
+      "triangles": 186,
       "meshes": 3,
       "animations": []
     }
