@@ -114,7 +114,7 @@ export function App() {
           dpr={[1, 1.6]}
           frameloop={room && !reducedMotion ? "always" : "demand"}
           camera={{
-            position: window.innerWidth <= 760 ? [21, 24, 27] : [14, 16, 19],
+            position: window.innerWidth <= 760 ? [38, 44, 50] : [25, 29, 34],
             fov: window.innerWidth <= 760 ? 68 : 44
           }}
         >

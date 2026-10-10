@@ -16,6 +16,8 @@ const colorMap: Record<PlayerColor, string> = {
   sky: "#4a9ed8"
 };
 
+const BOARD_SCALE = 2;
+
 const terrainColor: Record<Terrain, string> = {
   beach: "#e8c878",
   forest: "#4f9a68",
@@ -705,97 +707,110 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   return (
     <>
       <color attach="background" args={["#063f52"]} />
-      <fog attach="fog" args={["#0a5063", 34, 72]} />
+      <fog attach="fog" args={["#0a5063", 64, 136]} />
       <ambientLight intensity={1.08} />
-      <directionalLight position={[8, 14, 6]} intensity={2.8} color="#fff4d5" castShadow shadow-mapSize={[2048, 2048]} />
+      <directionalLight
+        position={[16, 28, 12]}
+        intensity={2.8}
+        color="#fff4d5"
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-30}
+        shadow-camera-right={30}
+        shadow-camera-top={30}
+        shadow-camera-bottom={-30}
+        shadow-camera-far={80}
+      />
       <hemisphereLight args={["#d9fbf5", "#174336", 1.28]} />
-      <Ocean />
-      <OceanDecorations spaces={oceanDecorations} />
-      <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color="#bdeff2" position-y={0.1} />
-      {room?.tiles.length ? (
-        <>
-          {room.tiles.map((tile) => (
-            <Tile
-              key={tile.id}
-              tile={tile}
-              highlighted={moveTargets.has(tile.id) || sinkTargets.has(tile.id)}
-              selected={selectedTile?.id === tile.id}
-              onClick={() => handleTileClick(tile)}
-            />
-          ))}
-          {room.waterSpaces.map((space) => (
-            <WaterTarget key={space.id} space={space} highlighted={moveTargets.has(space.id)} onClick={() => handleTarget(space.id)} />
-          ))}
-          {room.tiles.map((tile) => (
-            <SunkenTileTarget
-              key={`sunken-target-${tile.id}`}
-              tile={tile}
-              highlighted={moveTargets.has(tile.id)}
-              onClick={() => handleTarget(tile.id)}
-            />
-          ))}
-          {room.rafts.map((raft) => {
-            const space = allSpaces.find((item) => item.id === raft.locationId);
-            if (!space) return null;
-            return <RaftPiece key={raft.id} raft={raft} space={space} selected={raft.id === selectedRaftId} onClick={() => handleRaftClick(raft)} />;
-          })}
-          {room.creatures.map((creature) => {
-            const space = allSpaces.find((item) => item.id === creature.locationId);
-            if (!space) return null;
-            const selectable = myTurn && (
-              (room.turnPhase === "creature-move" &&
-                room.pendingChoice?.type === "move-creature" &&
-                creature.type === room.pendingChoice.creatureType &&
-                (!room.pendingChoice.creatureId || room.pendingChoice.creatureId === creature.id)) ||
-              (room.turnPhase === "action" && (activeAbility === "dive" || activeAbility === "repellent"))
-            );
-            return (
-              <CreaturePiece
-                key={creature.id}
-                creature={creature}
-                space={space}
-                selected={creature.id === selectedCreatureId}
-                placement={unitPlacements.get(creature.id)}
-                onClick={() => selectable && selectCreature(creature.id === selectedCreatureId ? null : creature.id)}
+      <group scale={BOARD_SCALE}>
+        <Ocean />
+        <OceanDecorations spaces={oceanDecorations} />
+        <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color="#bdeff2" position-y={0.1} />
+        {room?.tiles.length ? (
+          <>
+            {room.tiles.map((tile) => (
+              <Tile
+                key={tile.id}
+                tile={tile}
+                highlighted={moveTargets.has(tile.id) || sinkTargets.has(tile.id)}
+                selected={selectedTile?.id === tile.id}
+                onClick={() => handleTileClick(tile)}
               />
-            );
-          })}
-          {room.explorers.map((explorer, index) => {
-            const player = room.players.find((candidate) => candidate.id === explorer.ownerId);
-            if (!player) return null;
-            const selectable =
-              myTurn &&
-              room.turnPhase === "action" &&
-              explorer.ownerId === clientId &&
-              !explorer.lost &&
-              !explorer.rescued &&
-              Boolean(explorer.tileId) &&
-              (!activeAbility || activeAbility !== "dolphin" || explorer.swimming);
-            const locationIndex = room.explorers
-              .filter((item) => item.locationId === explorer.locationId && !item.lost && !item.rescued)
-              .findIndex((item) => item.id === explorer.id);
-            return (
-              <Explorer
-                key={explorer.id}
-                explorer={explorer}
-                color={colorMap[explorer.color]}
-                index={locationIndex >= 0 ? locationIndex : index}
-                selected={explorer.id === selectedExplorerId}
-                tiles={allSpaces as TileView[]}
-                placement={unitPlacements.get(explorer.id)}
-                onClick={() => selectable && selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id)}
+            ))}
+            {room.waterSpaces.map((space) => (
+              <WaterTarget key={space.id} space={space} highlighted={moveTargets.has(space.id)} onClick={() => handleTarget(space.id)} />
+            ))}
+            {room.tiles.map((tile) => (
+              <SunkenTileTarget
+                key={`sunken-target-${tile.id}`}
+                tile={tile}
+                highlighted={moveTargets.has(tile.id)}
+                onClick={() => handleTarget(tile.id)}
               />
-            );
-          })}
-        </>
-      ) : (
-        <PreviewIsland />
-      )}
-      <ContactShadows position={[0, -0.19, 0]} opacity={0.34} scale={24} blur={2.8} far={8} />
+            ))}
+            {room.rafts.map((raft) => {
+              const space = allSpaces.find((item) => item.id === raft.locationId);
+              if (!space) return null;
+              return <RaftPiece key={raft.id} raft={raft} space={space} selected={raft.id === selectedRaftId} onClick={() => handleRaftClick(raft)} />;
+            })}
+            {room.creatures.map((creature) => {
+              const space = allSpaces.find((item) => item.id === creature.locationId);
+              if (!space) return null;
+              const selectable = myTurn && (
+                (room.turnPhase === "creature-move" &&
+                  room.pendingChoice?.type === "move-creature" &&
+                  creature.type === room.pendingChoice.creatureType &&
+                  (!room.pendingChoice.creatureId || room.pendingChoice.creatureId === creature.id)) ||
+                (room.turnPhase === "action" && (activeAbility === "dive" || activeAbility === "repellent"))
+              );
+              return (
+                <CreaturePiece
+                  key={creature.id}
+                  creature={creature}
+                  space={space}
+                  selected={creature.id === selectedCreatureId}
+                  placement={unitPlacements.get(creature.id)}
+                  onClick={() => selectable && selectCreature(creature.id === selectedCreatureId ? null : creature.id)}
+                />
+              );
+            })}
+            {room.explorers.map((explorer, index) => {
+              const player = room.players.find((candidate) => candidate.id === explorer.ownerId);
+              if (!player) return null;
+              const selectable =
+                myTurn &&
+                room.turnPhase === "action" &&
+                explorer.ownerId === clientId &&
+                !explorer.lost &&
+                !explorer.rescued &&
+                Boolean(explorer.tileId) &&
+                (!activeAbility || activeAbility !== "dolphin" || explorer.swimming);
+              const locationIndex = room.explorers
+                .filter((item) => item.locationId === explorer.locationId && !item.lost && !item.rescued)
+                .findIndex((item) => item.id === explorer.id);
+              return (
+                <Explorer
+                  key={explorer.id}
+                  explorer={explorer}
+                  color={colorMap[explorer.color]}
+                  index={locationIndex >= 0 ? locationIndex : index}
+                  selected={explorer.id === selectedExplorerId}
+                  tiles={allSpaces as TileView[]}
+                  placement={unitPlacements.get(explorer.id)}
+                  onClick={() => selectable && selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id)}
+                />
+              );
+            })}
+          </>
+        ) : (
+          <PreviewIsland />
+        )}
+        <ContactShadows position={[0, -0.19, 0]} opacity={0.34} scale={24} blur={2.8} far={8} />
+      </group>
       <OrbitControls
         makeDefault
-        minDistance={9}
-        maxDistance={46}
+        minDistance={16}
+        maxDistance={86}
         minPolarAngle={0.45}
         maxPolarAngle={1.2}
         target={[0, 0, 0]}
