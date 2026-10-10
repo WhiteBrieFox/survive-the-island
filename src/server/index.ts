@@ -507,8 +507,11 @@ fastify.get("/health", async () => ({ ok: true, rooms: rooms.size }));
 if (process.env.NODE_ENV === "production") {
   const root = join(fileURLToPath(new URL("../..", import.meta.url)), "dist/client");
   if (!existsSync(root)) throw new Error("缺少 dist/client，请先运行 pnpm build");
-  await fastify.register(fastifyStatic, { root, wildcard: false });
-  fastify.setNotFoundHandler((_request, reply) => reply.sendFile("index.html"));
+  await fastify.register(fastifyStatic, { root });
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith("/assets/")) return reply.code(404).send({ error: "资源不存在" });
+    return reply.sendFile("index.html");
+  });
 }
 
 await fastify.listen({ port, host });
