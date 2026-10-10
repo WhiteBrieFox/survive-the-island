@@ -77,6 +77,7 @@ const normalizeRoom = (room: GameRoom): GameRoom => ({
   turnStartedWithoutExplorers: room.turnStartedWithoutExplorers ?? false,
   pendingAttack: room.pendingAttack ?? null,
   displacementQueue: room.displacementQueue ?? [],
+  displacementMode: room.displacementMode ?? "choose",
   interactionContinuation: room.interactionContinuation ?? "none",
   reconnectTokens: room.reconnectTokens ?? {},
   spectatorTokens: room.spectatorTokens ?? {}

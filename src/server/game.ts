@@ -65,6 +65,7 @@ export interface GameRoom {
   turnStartedWithoutExplorers: boolean;
   pendingAttack: PendingAttack | null;
   displacementQueue: Displacement[];
+  displacementMode: "choose" | "random";
   interactionContinuation: "none" | "finish-creature" | "displacement";
   reconnectTokens: Record<string, string>;
   spectatorTokens: Record<string, string>;
@@ -109,7 +110,7 @@ export function createRoom(code: string, hostId: string, hostName: string, passw
     actionsLeft: 3, risingRemaining: 1, round: 1, volcanoes: 0, maxVolcanoes: 3,
     log: [], events: [], winnerIds: [], setupPlaced: 0, resumePhase: null,
     creatureMovesRemaining: 0, creatureMoved: false, turnStartedWithoutExplorers: false,
-    pendingAttack: null, displacementQueue: [], interactionContinuation: "none",
+    pendingAttack: null, displacementQueue: [], displacementMode: "choose", interactionContinuation: "none",
     reconnectTokens: {}, spectatorTokens: {}
   };
   recordEvent(room, "room-created", `${hostName} 创建了房间`, hostId);
@@ -396,7 +397,7 @@ function applyEffect(room: GameRoom, playerId: string, tile: GameTile) {
     recordEvent(room, "whirlpool", "漩涡吞噬了周围的一切", playerId, { tileId: tile.id });
   } else if (tile.effect === "shark" || tile.effect === "kaiju") {
     const creature = spawnCreature(room, tile.effect, tile.id);
-    if (hasInteractionTarget(room, creature)) resolveCreatureInteraction(room, creature);
+    if (hasInteractionTarget(room, creature)) resolveCreatureInteraction(room, creature, tile.effect === "kaiju" ? "random" : "choose");
   } else if (tile.effect === "raft") {
     if (room.rafts.length < 12) room.rafts.push({ id: `raft-${randomUUID()}`, locationId: tile.id });
     else {
@@ -571,7 +572,12 @@ function resolveInteractions(room: GameRoom, locationId: string) {
   if (creature) resolveCreatureInteraction(room, creature);
 }
 
-function resolveCreatureInteraction(room: GameRoom, creature: CreatureView) {
+function resolveCreatureInteraction(
+  room: GameRoom,
+  creature: CreatureView,
+  displacementMode: GameRoom["displacementMode"] = "choose"
+) {
+  room.displacementMode = displacementMode;
   if (creature.type === "sea-serpent") {
     eliminateAt(room, creature.locationId, true, true);
     recordEvent(room, "sea-serpent-attack", "海蛇摧毁了该格的木筏和探险者", room.currentPlayerId ?? undefined, {
@@ -656,7 +662,7 @@ function applyCreatureAttack(room: GameRoom, creature: CreatureView) {
       .map((item): Displacement => ({ entityId: item.id, entityKind: "creature" }))
   ];
   recordEvent(room, "kaiju-attack", "巨兽摧毁木筏并开始推离同格单位", room.currentPlayerId ?? undefined, {
-    creatureId: creature.id, locationId: creature.locationId
+    creatureId: creature.id, locationId: creature.locationId, displacementMode: room.displacementMode
   });
   processNextDisplacement(room);
 }
@@ -698,6 +704,12 @@ function processNextDisplacement(room: GameRoom) {
     processNextDisplacement(room);
     return;
   }
+  if (room.displacementMode === "random") {
+    moveDisplacedEntity(room, next, allowedTargetIds[Math.floor(Math.random() * allowedTargetIds.length)]);
+    room.displacementQueue.shift();
+    processNextDisplacement(room);
+    return;
+  }
   room.pendingChoice = {
     type: "displace",
     entityId: next.entityId,
@@ -706,13 +718,7 @@ function processNextDisplacement(room: GameRoom) {
   };
 }
 
-export function resolveDisplacement(room: GameRoom, playerId: string, targetId: string) {
-  requireTurn(room, playerId);
-  const pending = room.pendingChoice;
-  const displacement = room.displacementQueue[0];
-  if (!pending || pending.type !== "displace" || !displacement || !pending.allowedTargetIds?.includes(targetId)) {
-    throw new Error("请选择高亮的推离目标");
-  }
+function moveDisplacedEntity(room: GameRoom, displacement: Displacement, targetId: string) {
   if (displacement.entityKind === "explorer") {
     const explorer = room.explorers.find((item) => item.id === displacement.entityId);
     if (explorer) {
@@ -725,9 +731,19 @@ export function resolveDisplacement(room: GameRoom, playerId: string, targetId: 
     const creature = room.creatures.find((item) => item.id === displacement.entityId);
     if (creature) creature.locationId = targetId;
   }
-  recordEvent(room, "unit-displaced", "巨兽推离了一个单位", playerId, {
-    ...displacement, targetId
+  recordEvent(room, "unit-displaced", "巨兽推离了一个单位", room.currentPlayerId ?? undefined, {
+    ...displacement, targetId, random: room.displacementMode === "random"
   });
+}
+
+export function resolveDisplacement(room: GameRoom, playerId: string, targetId: string) {
+  requireTurn(room, playerId);
+  const pending = room.pendingChoice;
+  const displacement = room.displacementQueue[0];
+  if (!pending || pending.type !== "displace" || !displacement || !pending.allowedTargetIds?.includes(targetId)) {
+    throw new Error("请选择高亮的推离目标");
+  }
+  moveDisplacedEntity(room, displacement, targetId);
   room.displacementQueue.shift();
   processNextDisplacement(room);
   bump(room);
@@ -736,6 +752,7 @@ export function resolveDisplacement(room: GameRoom, playerId: string, targetId: 
 function completeInteraction(room: GameRoom) {
   room.pendingChoice = null;
   room.pendingAttack = null;
+  room.displacementMode = "choose";
   if (room.interactionContinuation === "displacement" && room.displacementQueue.length) {
     processNextDisplacement(room);
   } else if (room.interactionContinuation === "finish-creature") {
