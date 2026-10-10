@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ContactShadows, Float, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
+import { ContactShadows, Edges, Float, Html, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import {
-  AmbientLight, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group,
+  AmbientLight, BufferGeometry, CanvasTexture, Color, DirectionalLight, Float32BufferAttribute, Group,
   HemisphereLight, LineSegments, Mesh, MeshBasicMaterial, MeshPhysicalMaterial,
-  MeshStandardMaterial, Vector3, type Material, type Object3D
+  MeshStandardMaterial, SRGBColorSpace, Vector3, type Material, type Object3D
 } from "three";
 import { useShallow } from "zustand/react/shallow";
-import type { CreatureView, ExplorerView, PlayerColor, PublicRoomState, RaftView, Terrain, TileView, WaterSpaceView } from "../../shared/types";
+import type {
+  CreatureRoll, CreatureView, ExplorerView, PlayerColor, PublicRoomState,
+  RaftView, Terrain, TileView, WaterSpaceView
+} from "../../shared/types";
 import { areAdjacent, createIslandCoords, hexToWorld } from "../../shared/hex";
 import { dayStageFor, type DayStage } from "../dayCycle";
 import { useGameStore } from "../gameStore";
@@ -39,12 +42,25 @@ const landUnitSlots: Array<[number, number]> = [
 ];
 
 const waterUnitSlots: Array<[number, number]> = [
-  [0.34, 0.24],
-  [-0.34, 0.24],
-  [0, -0.38],
-  [0.54, -0.22],
-  [-0.54, -0.22]
+  [0.36, 0.48],
+  [-0.36, 0.48],
+  [0.68, 0.04],
+  [-0.68, 0.04],
+  [0.42, -0.48],
+  [-0.42, -0.48],
+  [0, -0.66],
+  [0, 0.08]
 ];
+
+const rescueUnitSlots: Array<[number, number]> = [
+  [-0.48, 0.38],
+  [0, 0.54],
+  [0.48, 0.38],
+  [-0.32, -0.26],
+  [0.32, -0.26]
+];
+
+const EXPLORER_SPACE_CAPACITY = 5;
 
 type UnitPlacement = {
   x: number;
@@ -357,16 +373,21 @@ function RouteGrid({ spaces, tiles }: { spaces: Array<TileView | WaterSpaceView>
   }, [geometry]);
 
   return (
-    <lineSegments ref={lines} geometry={geometry} renderOrder={1}>
-      <lineDashedMaterial
-        color="#d9f3e8"
-        dashSize={0.15}
-        gapSize={0.13}
-        transparent
-        opacity={0.28}
-        depthWrite={false}
-      />
-    </lineSegments>
+    <group>
+      <lineSegments geometry={geometry} renderOrder={1}>
+        <lineBasicMaterial color="#4d8f91" transparent opacity={0.34} depthWrite={false} />
+      </lineSegments>
+      <lineSegments ref={lines} geometry={geometry} renderOrder={2}>
+        <lineDashedMaterial
+          color="#effff5"
+          dashSize={0.2}
+          gapSize={0.1}
+          transparent
+          opacity={0.68}
+          depthWrite={false}
+        />
+      </lineSegments>
+    </group>
   );
 }
 
@@ -552,7 +573,8 @@ function Explorer({
   selected,
   onClick,
   tiles,
-  placement
+  placement,
+  showValue
 }: {
   explorer: ExplorerView;
   color: string;
@@ -561,9 +583,10 @@ function Explorer({
   onClick: () => void;
   tiles: TileView[];
   placement?: UnitPlacement;
+  showValue?: boolean;
 }) {
   const tile = tiles.find((candidate) => candidate.id === explorer.locationId);
-  if (!tile || explorer.rescued || explorer.lost) return null;
+  if (!tile || explorer.lost) return null;
   const { x, z } = hexToWorld(tile);
   const raftSeats: Array<[number, number]> = [[-0.28, 0.16], [0.28, 0.16], [0, -0.28]];
   const raftSeat = raftSeats[index % raftSeats.length];
@@ -573,7 +596,7 @@ function Explorer({
       ? [placement.x, placement.z]
       : [0, 0];
   const terrainHeight = "terrain" in tile && tile.active
-    ? tile.terrain === "mountain" ? 0.36 : 0.2
+    ? tile.isRescue ? 0.16 : tile.terrain === "mountain" ? 0.36 : 0.2
     : -0.39;
   const facing = explorer.raftId || explorer.swimming
     ? 0
@@ -587,7 +610,7 @@ function Explorer({
     <Float
       speed={selected ? 4 : 1.4}
       rotationIntensity={0}
-      floatIntensity={selected ? 0.16 : explorer.swimming ? 0.06 : explorer.raftId ? 0.03 : 0}
+      floatIntensity={selected ? 0.16 : explorer.rescued ? 0 : explorer.swimming ? 0.06 : explorer.raftId ? 0.03 : 0}
     >
       <AnimatedMover
         position={[x + offsetX, explorer.raftId ? 0.23 : terrainHeight, z + offsetZ]}
@@ -625,6 +648,17 @@ function Explorer({
               <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
             </mesh>
           )}
+          {showValue && explorer.value !== undefined && (
+            <Html
+              center
+              position={[0, 0.72, 0]}
+              distanceFactor={12}
+              className="explorer-value-anchor"
+              style={{ pointerEvents: "none" }}
+            >
+              <span className="explorer-value-badge">{explorer.value}</span>
+            </Html>
+          )}
         </group>
       </AnimatedMover>
     </Float>
@@ -635,14 +669,20 @@ function WaterTarget({ space, highlighted, onClick }: { space: WaterSpaceView; h
   if (!highlighted) return null;
   const { x, z } = hexToWorld(space);
   return (
-    <mesh
-      position={[x, -0.19, z]}
+    <group
+      position={[x, -0.18, z]}
       rotation-x={-Math.PI / 2}
       onClick={(event) => { event.stopPropagation(); onClick(); }}
     >
-      <ringGeometry args={[0.58, 0.82, 6]} />
-      <meshBasicMaterial color="#fff1a8" transparent opacity={0.9} />
-    </mesh>
+      <mesh renderOrder={8}>
+        <circleGeometry args={[1.02, 6]} />
+        <meshBasicMaterial color="#fff1a8" transparent opacity={0.12} depthWrite={false} />
+      </mesh>
+      <mesh position-z={0.008} renderOrder={9}>
+        <ringGeometry args={[0.58, 0.86, 6]} />
+        <meshBasicMaterial color="#fff1a8" transparent opacity={0.94} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 
@@ -747,6 +787,164 @@ function CreaturePiece({
         </group>
       </AnimatedMover>
     </Float>
+  );
+}
+
+function CreatureDieRoll({ roll, rollId, rolledAt }: { roll: CreatureRoll; rollId: number; rolledAt: string }) {
+  const die = useRef<Group>(null);
+  const elapsed = useRef(0);
+  const isRecent = () => Date.now() - new Date(rolledAt).getTime() < 6000;
+  const [visible, setVisible] = useState(isRecent);
+  const faceTextures = useMemo(() => {
+    const makeTexture = (type: CreatureRoll) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 256;
+      const context = canvas.getContext("2d")!;
+      const palette = type === "sea-serpent"
+        ? { background: "#d66757", ink: "#fff2d2", label: "海蛇" }
+        : type === "shark"
+          ? { background: "#208d99", ink: "#eafff7", label: "鲨鱼" }
+          : { background: "#326fa0", ink: "#f4f0c9", label: "巨兽" };
+
+      context.fillStyle = palette.background;
+      context.fillRect(0, 0, 256, 256);
+      context.strokeStyle = "rgba(255,255,255,0.2)";
+      context.lineWidth = 8;
+      context.strokeRect(14, 14, 228, 228);
+      context.fillStyle = palette.ink;
+      context.strokeStyle = palette.ink;
+
+      if (type === "sea-serpent") {
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.lineWidth = 30;
+        context.beginPath();
+        context.moveTo(53, 144);
+        context.bezierCurveTo(76, 80, 134, 194, 184, 103);
+        context.stroke();
+        context.beginPath();
+        context.arc(190, 89, 25, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = palette.background;
+        context.beginPath();
+        context.arc(198, 82, 4, 0, Math.PI * 2);
+        context.fill();
+      } else if (type === "shark") {
+        context.beginPath();
+        context.moveTo(43, 140);
+        context.quadraticCurveTo(112, 72, 195, 126);
+        context.lineTo(224, 99);
+        context.lineTo(214, 151);
+        context.lineTo(229, 181);
+        context.lineTo(188, 164);
+        context.quadraticCurveTo(102, 201, 43, 140);
+        context.fill();
+        context.beginPath();
+        context.moveTo(111, 106);
+        context.lineTo(137, 56);
+        context.lineTo(157, 117);
+        context.fill();
+        context.fillStyle = palette.background;
+        context.beginPath();
+        context.arc(170, 128, 4, 0, Math.PI * 2);
+        context.fill();
+      } else {
+        context.beginPath();
+        context.moveTo(70, 180);
+        context.lineTo(62, 124);
+        context.lineTo(83, 88);
+        context.lineTo(108, 79);
+        context.lineTo(126, 52);
+        context.lineTo(139, 82);
+        context.lineTo(164, 92);
+        context.lineTo(183, 130);
+        context.lineTo(178, 180);
+        context.lineTo(148, 180);
+        context.lineTo(143, 145);
+        context.lineTo(104, 145);
+        context.lineTo(99, 180);
+        context.fill();
+        [79, 99, 120, 143].forEach((x, index) => {
+          context.beginPath();
+          context.moveTo(x, 99 - index * 5);
+          context.lineTo(x - 18, 70 - index * 5);
+          context.lineTo(x + 7, 82 - index * 3);
+          context.fill();
+        });
+        context.fillStyle = palette.background;
+        context.beginPath();
+        context.arc(151, 108, 4, 0, Math.PI * 2);
+        context.fill();
+      }
+
+      context.fillStyle = palette.ink;
+      context.font = "bold 25px sans-serif";
+      context.textAlign = "center";
+      context.fillText(palette.label, 128, 224);
+      const texture = new CanvasTexture(canvas);
+      texture.colorSpace = SRGBColorSpace;
+      return texture;
+    };
+    return {
+      serpent: makeTexture("sea-serpent"),
+      shark: makeTexture("shark"),
+      kaiju: makeTexture("kaiju")
+    };
+  }, []);
+  const finalRotation: [number, number, number] = roll === "sea-serpent"
+    ? [0, 0, Math.PI / 2]
+    : roll === "shark"
+      ? [0, 0, 0]
+      : [-Math.PI / 2, 0, 0];
+
+  useEffect(() => {
+    elapsed.current = 0;
+    setVisible(isRecent());
+    const timer = window.setTimeout(() => setVisible(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [rollId, rolledAt]);
+
+  useEffect(() => () => {
+    faceTextures.serpent.dispose();
+    faceTextures.shark.dispose();
+    faceTextures.kaiju.dispose();
+  }, [faceTextures]);
+
+  useFrame((_, delta) => {
+    if (!die.current || !visible) return;
+    elapsed.current += delta;
+    const rolling = Math.min(1, elapsed.current / 1.35);
+    if (rolling < 1) {
+      die.current.position.y = 4.8 + Math.sin(rolling * Math.PI) * 2.6;
+      die.current.rotation.x += delta * 8.4;
+      die.current.rotation.y += delta * 10.2;
+      die.current.rotation.z += delta * 6.6;
+      die.current.scale.setScalar(0.72 + Math.sin(rolling * Math.PI) * 0.18);
+      return;
+    }
+    const settleStep = Math.min(1, delta * 7);
+    die.current.position.y += (4.8 - die.current.position.y) * settleStep;
+    die.current.rotation.x += (finalRotation[0] - die.current.rotation.x) * settleStep;
+    die.current.rotation.y += (finalRotation[1] - die.current.rotation.y) * settleStep;
+    die.current.rotation.z += (finalRotation[2] - die.current.rotation.z) * settleStep;
+    die.current.scale.lerp(new Vector3(0.86, 0.86, 0.86), settleStep);
+  });
+
+  if (!visible) return null;
+  return (
+    <group ref={die} position={[0, 4.8, 0]}>
+      <mesh castShadow>
+        <boxGeometry args={[1.65, 1.65, 1.65]} />
+        <meshStandardMaterial attach="material-0" map={faceTextures.serpent} roughness={0.42} />
+        <meshStandardMaterial attach="material-1" map={faceTextures.serpent} roughness={0.42} />
+        <meshStandardMaterial attach="material-2" map={faceTextures.shark} roughness={0.42} />
+        <meshStandardMaterial attach="material-3" map={faceTextures.shark} roughness={0.42} />
+        <meshStandardMaterial attach="material-4" map={faceTextures.kaiju} roughness={0.42} />
+        <meshStandardMaterial attach="material-5" map={faceTextures.kaiju} roughness={0.42} />
+        <Edges color="#f7edcf" threshold={10} />
+      </mesh>
+    </group>
   );
 }
 
@@ -857,13 +1055,18 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
 
   const sinkingTileIds = useMemo(() => new Set(sinkingTiles.map((tile) => tile.id)), [sinkingTiles]);
   const sinkAnimationLocked = sinkRequestPending || sinkingTiles.length > 0;
+  const creatureRollEvent = room?.events.find((event) => event.id === room.creatureRollId);
   const unitPlacements = useMemo(() => {
     const placements = new Map<string, UnitPlacement>();
     if (!room) return placements;
 
     for (const space of allSpaces) {
       const tile = room.tiles.find((candidate) => candidate.id === space.id);
-      const slots = tile?.active && !tile.isRescue ? landUnitSlots : waterUnitSlots;
+      const slots = tile?.isRescue
+        ? rescueUnitSlots
+        : tile?.active
+          ? landUnitSlots
+          : waterUnitSlots;
       const units = [
         ...room.creatures
           .filter((creature) => creature.locationId === space.id)
@@ -875,8 +1078,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
           .filter((explorer) =>
             explorer.locationId === space.id &&
             !explorer.raftId &&
-            !explorer.lost &&
-            !explorer.rescued
+            !explorer.lost
           )
           .map((explorer) => ({ id: explorer.id, priority: 3 }))
       ].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
@@ -929,6 +1131,9 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     }
     if (room.turnPhase !== "action") return new Set<string>();
     if (activeAbility === "paddles" && selectedRaft && selectedRaftSpace) {
+      const aboardIds = room.explorers
+        .filter((explorer) => explorer.raftId === selectedRaft.id && !explorer.lost && !explorer.rescued)
+        .map((explorer) => explorer.id);
       return new Set(allSpaces.filter((space) => {
         const distance = Math.max(
           Math.abs(selectedRaftSpace.q - space.q),
@@ -937,7 +1142,12 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
         );
         return distance >= 1 && distance <= 2 &&
           (room.waterSpaces.some((water) => water.id === space.id) || room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked)) &&
-          !room.rafts.some((raft) => raft.locationId === space.id);
+          !room.rafts.some((raft) => raft.locationId === space.id) &&
+          room.explorers.filter((explorer) =>
+            explorer.locationId === space.id &&
+            !explorer.lost &&
+            !aboardIds.includes(explorer.id)
+          ).length + aboardIds.length <= EXPLORER_SPACE_CAPACITY;
       }).map((space) => space.id));
     }
     if (activeAbility === "dolphin" && selectedExplorer?.swimming && selectedTile) {
@@ -947,18 +1157,40 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
           Math.abs(selectedTile.r - space.r),
           Math.abs(selectedTile.q + selectedTile.r - space.q - space.r)
         );
-        return distance >= 1 && distance <= 2;
+        return distance >= 1 && distance <= 2 &&
+          room.explorers.filter((explorer) =>
+            explorer.locationId === space.id &&
+            !explorer.lost &&
+            explorer.id !== selectedExplorer.id
+          ).length < EXPLORER_SPACE_CAPACITY;
       }).map((space) => space.id));
     }
     if (activeAbility === "dive" && selectedCreature) {
       return new Set(room.waterSpaces.filter((space) => !room.creatures.some((creature) => creature.locationId === space.id)).map((space) => space.id));
     }
-    if (selectedExplorer && selectedTile) return new Set(allSpaces.filter((space) => areAdjacent(selectedTile, space)).map((space) => space.id));
-    if (selectedRaft && selectedRaftSpace) return new Set(allSpaces.filter((space) =>
-      areAdjacent(selectedRaftSpace, space) &&
-      (room.waterSpaces.some((water) => water.id === space.id) || room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked)) &&
-      !room.rafts.some((raft) => raft.locationId === space.id)
+    if (selectedExplorer && selectedTile) return new Set(allSpaces.filter((space) =>
+      areAdjacent(selectedTile, space) &&
+      room.explorers.filter((explorer) =>
+        explorer.locationId === space.id &&
+        !explorer.lost &&
+        explorer.id !== selectedExplorer.id
+      ).length < EXPLORER_SPACE_CAPACITY
     ).map((space) => space.id));
+    if (selectedRaft && selectedRaftSpace) {
+      const aboardIds = room.explorers
+        .filter((explorer) => explorer.raftId === selectedRaft.id && !explorer.lost && !explorer.rescued)
+        .map((explorer) => explorer.id);
+      return new Set(allSpaces.filter((space) =>
+        areAdjacent(selectedRaftSpace, space) &&
+        (room.waterSpaces.some((water) => water.id === space.id) || room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked)) &&
+        !room.rafts.some((raft) => raft.locationId === space.id) &&
+        room.explorers.filter((explorer) =>
+          explorer.locationId === space.id &&
+          !explorer.lost &&
+          !aboardIds.includes(explorer.id)
+        ).length + aboardIds.length <= EXPLORER_SPACE_CAPACITY
+      ).map((space) => space.id));
+    }
     return new Set<string>();
   }, [activeAbility, allSpaces, myTurn, room, selectedCreature, selectedCreatureSpace, selectedExplorer, selectedRaft, selectedRaftSpace, selectedTile]);
 
@@ -1042,6 +1274,14 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
         <OceanDecorations spaces={oceanDecorations} />
         {room && <RouteGrid spaces={allSpaces} tiles={room.tiles} />}
         <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color={dayStage.sparkle} position-y={0.1} />
+        {room?.creatureRoll && room.creatureRollId > 0 && creatureRollEvent && (
+          <CreatureDieRoll
+            key={room.creatureRollId}
+            roll={room.creatureRoll}
+            rollId={room.creatureRollId}
+            rolledAt={creatureRollEvent.at}
+          />
+        )}
         {room?.tiles.length ? (
           <>
             {room.tiles.map((tile) => (
@@ -1104,7 +1344,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                 Boolean(explorer.tileId) &&
                 (!activeAbility || activeAbility !== "dolphin" || explorer.swimming);
               const locationIndex = room.explorers
-                .filter((item) => item.locationId === explorer.locationId && !item.lost && !item.rescued)
+                .filter((item) => item.locationId === explorer.locationId && !item.lost)
                 .findIndex((item) => item.id === explorer.id);
               return (
                 <Explorer
@@ -1115,6 +1355,11 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                   selected={explorer.id === selectedExplorerId}
                   tiles={allSpaces as TileView[]}
                   placement={unitPlacements.get(explorer.id)}
+                  showValue={
+                    explorer.ownerId === clientId &&
+                    explorer.value !== undefined &&
+                    (room.turnPhase === "setup-explorer" || room.turnPhase === "setup-raft")
+                  }
                   onClick={() => selectable && selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id)}
                 />
               );

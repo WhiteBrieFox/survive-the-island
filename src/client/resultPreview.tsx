@@ -84,6 +84,7 @@ const room: PublicRoomState = {
   currentPlayerId: null,
   turnPhase: "creature",
   creatureRoll: null,
+  creatureRollId: 0,
   actionsLeft: 0,
   round: 12,
   volcanoes: 3,

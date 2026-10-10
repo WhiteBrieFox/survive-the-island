@@ -88,6 +88,7 @@ export interface PendingChoiceView {
   creatureId?: string;
   stepsRemaining?: number;
   canFinish?: boolean;
+  autoSkipReason?: "missing" | "blocked";
   responderIds?: string[];
   declinedIds?: string[];
   entityId?: string;
@@ -123,6 +124,7 @@ export interface PublicRoomState {
   currentPlayerId: string | null;
   turnPhase: TurnPhase;
   creatureRoll: CreatureRoll | null;
+  creatureRollId: number;
   actionsLeft: number;
   round: number;
   volcanoes: number;

@@ -75,7 +75,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
                 <li><b>3</b><div><strong>生物阶段</strong><span>掷生物骰，由当前玩家选择对应生物并逐格移动，也可以主动跳过。</span></div></li>
                 <li><b>4</b><div><strong>下一位玩家</strong><span>所有攻击、推离与能力响应结算完成后，回合才会交给下一位玩家。</span></div></li>
               </ol>
-              <div className="rule-callout"><Dices size={20} /><span>开局先轮流放置全部探险者，再放置木筏。自己即将放置的探险者价值只有自己可见。</span></div>
+              <div className="rule-callout"><Dices size={20} /><span>开局先轮流放置全部探险者，再放置木筏。整个放置阶段都能看到自己每名探险者的宝藏价值，正式行动开始后隐藏。</span></div>
             </div>
           )}
 
@@ -85,7 +85,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
                 <article>
                   <Footprints size={24} />
                   <h3>探险者</h3>
-                  <p>每次走到相邻格。进入水域、从水域离开或在水中移动都算游泳；同一名落水者每回合最多游泳移动一次。</p>
+                  <p>每次走到相邻格，每格最多容纳 5 名探险者。进入水域、从水域离开或在水中移动都算游泳；同一名落水者每回合最多游泳移动一次。</p>
                 </article>
                 <article>
                   <LifeBuoy size={24} />
@@ -100,7 +100,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
                 <article>
                   <Navigation size={24} />
                   <h3>抵达终点</h3>
-                  <p>救援岛不能游上去，必须乘木筏抵达。到达后乘员获救，其宝藏价值加入所属玩家分数。</p>
+                  <p>救援岛不能游上去，必须乘木筏抵达。到达后探险者留在救援岛，其宝藏价值加入所属玩家分数，且不能再移动。</p>
                 </article>
               </div>
               <div className="rule-callout warning"><Waves size={20} /><span>木筏会优先经过能够救人的两格航线；如果船已坐满，剩余落水者会继续留在水中。</span></div>

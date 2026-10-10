@@ -49,6 +49,7 @@ export interface GameRoom {
   currentPlayerId: string | null;
   turnPhase: TurnPhase;
   creatureRoll: CreatureRoll | null;
+  creatureRollId: number;
   pendingChoice: PublicRoomState["pendingChoice"];
   actionsLeft: number;
   risingRemaining: number;
@@ -71,6 +72,7 @@ export interface GameRoom {
   reconnectTokens: Record<string, string>;
   spectatorTokens: Record<string, string>;
   aiTimer?: NodeJS.Timeout;
+  creatureSkipTimer?: NodeJS.Timeout;
 }
 
 const TREASURES = [1, 1, 1, 2, 2, 2, 3, 3, 4, 5];
@@ -83,6 +85,7 @@ const EFFECTS: Record<Terrain, TileEffect[]> = {
 const DIRS = [{ q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 }, { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }];
 const abilityName: Record<AbilityType, string> = { paddles: "船桨", dolphin: "海豚", dive: "潜水", "creature-die": "生物骰", repellent: "驱逐剂" };
 const creatureName = (type: CreatureType) => type === "sea-serpent" ? "海蛇" : type === "shark" ? "鲨鱼" : "巨兽";
+const EXPLORER_SPACE_CAPACITY = 5;
 const shuffle = <T>(input: T[]) => {
   const items = [...input];
   for (let i = items.length - 1; i > 0; i -= 1) {
@@ -107,7 +110,7 @@ export function createRoom(code: string, hostId: string, hostName: string, passw
     code, phase: "lobby", hostId, password, revision: 0,
     players: [makePlayer(hostId, hostName, PLAYER_COLORS[0], false)], spectators: [],
     tiles: [], waterSpaces: [], explorers: [], rafts: [], creatures: [],
-    currentPlayerId: null, turnPhase: "setup-explorer", creatureRoll: null, pendingChoice: null,
+    currentPlayerId: null, turnPhase: "setup-explorer", creatureRoll: null, creatureRollId: 0, pendingChoice: null,
     actionsLeft: 3, risingRemaining: 1, round: 1, volcanoes: 0, maxVolcanoes: 3,
     log: [], events: [], winnerIds: [], setupPlaced: 0, resumePhase: null,
     creatureMovesRemaining: 0, creatureMoved: false, turnStartedWithoutExplorers: false,
@@ -229,6 +232,17 @@ function isWater(room: GameRoom, id: string) {
 }
 function raftAt(room: GameRoom, id: string) { return room.rafts.find((raft) => raft.locationId === id); }
 function occupants(room: GameRoom, raftId: string) { return room.explorers.filter((explorer) => explorer.raftId === raftId && !explorer.lost && !explorer.rescued); }
+function explorersAt(room: GameRoom, locationId: string, excludedIds: string[] = []) {
+  const excluded = new Set(excludedIds);
+  return room.explorers.filter((explorer) =>
+    explorer.locationId === locationId &&
+    !explorer.lost &&
+    !excluded.has(explorer.id)
+  );
+}
+function hasExplorerCapacity(room: GameRoom, locationId: string, incoming = 1, excludedIds: string[] = []) {
+  return explorersAt(room, locationId, excludedIds).length + incoming <= EXPLORER_SPACE_CAPACITY;
+}
 function adjacentIds(room: GameRoom, id: string) {
   const source = coord(room, id);
   return source ? [...room.tiles, ...room.waterSpaces].filter((item) => areAdjacent(source, item)).map((item) => item.id) : [];
@@ -326,6 +340,10 @@ function raftRoute(room: GameRoom, fromId: string, targetId: string, maxDistance
 
 function sailRaft(room: GameRoom, raft: RaftView, route: string[]) {
   const boardedExplorerIds: string[] = [];
+  const aboardIds = occupants(room, raft.id).map((explorer) => explorer.id);
+  if (route.some((locationId) => !hasExplorerCapacity(room, locationId, aboardIds.length, aboardIds))) {
+    throw new Error("目标格最多容纳 5 名探险者");
+  }
   for (const locationId of route) {
     raft.locationId = locationId;
     occupants(room, raft.id).forEach((explorer) => {
@@ -348,6 +366,7 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
   const targetTile = room.tiles.find((tile) => tile.id === targetId);
   if (targetTile?.blocked || room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) throw new Error("该格被巨兽或火山阻挡");
   if (targetTile?.isRescue && !explorer.raftId) throw new Error("必须乘木筏抵达救援岛");
+  if (!hasExplorerCapacity(room, targetId, 1, [explorer.id])) throw new Error("目标格最多容纳 5 名探险者");
   const destinationRaft = raftAt(room, targetId);
   if (destinationRaft && occupants(room, destinationRaft.id).length >= 3) throw new Error("木筏已经满员");
   const sourceStable = Boolean(explorer.raftId || room.tiles.some((tile) => tile.id === explorer.locationId && tile.active));
@@ -363,7 +382,8 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
   room.actionsLeft -= 1;
   const player = room.players.find((item) => item.id === playerId)!;
   if (targetTile?.isRescue) {
-    explorer.locationId = explorer.tileId = explorer.raftId = null;
+    explorer.locationId = explorer.tileId = targetId;
+    explorer.raftId = null;
     explorer.swimming = false;
     explorer.rescued = true;
     player.score += explorer.value;
@@ -510,7 +530,9 @@ function startCreatureRoll(room: GameRoom, resume: TurnPhase) {
   const result = faces[Math.floor(Math.random() * faces.length)];
   room.creatureRoll = result;
   recordEvent(room, "creature-die", `生物骰掷出了${creatureName(result)}`, room.currentPlayerId ?? undefined, { result });
-  if (room.creatures.some((item) => item.type === result && legalCreatureTargetIds(room, item).length > 0)) {
+  room.creatureRollId = room.events.at(-1)?.id ?? room.creatureRollId + 1;
+  const matchingCreatures = room.creatures.filter((item) => item.type === result);
+  if (matchingCreatures.some((item) => legalCreatureTargetIds(room, item).length > 0)) {
     room.turnPhase = "creature-move";
     room.creatureMovesRemaining = result === "sea-serpent" ? 1 : 2;
     room.creatureMoved = false;
@@ -522,10 +544,17 @@ function startCreatureRoll(room: GameRoom, resume: TurnPhase) {
     };
     room.resumePhase = resume;
   } else {
-    recordEvent(room, "creature-skipped", `场上没有可移动的${creatureName(result)}，本次跳过`, room.currentPlayerId ?? undefined, {
-      result
-    });
-    finishCreatureMove(room);
+    room.turnPhase = "creature-move";
+    room.creatureMovesRemaining = 0;
+    room.creatureMoved = false;
+    room.pendingChoice = {
+      type: "move-creature",
+      creatureType: result,
+      stepsRemaining: 0,
+      canFinish: true,
+      autoSkipReason: matchingCreatures.length ? "blocked" : "missing"
+    };
+    room.resumePhase = resume;
   }
   bump(room);
   return result;
@@ -750,7 +779,7 @@ function displacementTargets(room: GameRoom, displacement: Displacement) {
       if (tile?.isRescue) return false;
       return moved.type === "kaiju" || isWater(room, id);
     }
-    return true;
+    return hasExplorerCapacity(room, id);
   });
 }
 
@@ -926,7 +955,8 @@ export function useAbility(room: GameRoom, playerId: string, ability: AbilityTyp
     const from = explorer?.locationId ? coord(room, explorer.locationId) : undefined;
     const to = targetId ? coord(room, targetId) : undefined;
     if (!explorer || !from || !to || !targetId || hexDistance(from, to) > 2 ||
-      room.tiles.some((tile) => tile.id === targetId && tile.isRescue)) throw new Error("海豚不能直接送达救援岛");
+      room.tiles.some((tile) => tile.id === targetId && tile.isRescue) ||
+      !hasExplorerCapacity(room, targetId, 1, [explorer.id])) throw new Error("海豚目标不合法或目标格已满");
     explorer.locationId = explorer.tileId = targetId;
     const raft = raftAt(room, targetId);
     explorer.raftId = raft && occupants(room, raft.id).length < 3 ? raft.id : null;
@@ -950,7 +980,6 @@ export function useAbility(room: GameRoom, playerId: string, ability: AbilityTyp
 function beginTurn(room: GameRoom) {
   room.turnPhase = "action";
   room.actionsLeft = 3;
-  room.creatureRoll = null;
   room.pendingChoice = null;
   room.explorers.forEach((item) => { item.swamThisTurn = false; });
   room.turnStartedWithoutExplorers = !room.explorers.some((item) =>
@@ -984,7 +1013,11 @@ export function runAITurn(room: GameRoom) {
       const rescueMove = room.explorers
         .filter((item) => item.ownerId === player.id && item.locationId && item.raftId && !item.lost && !item.rescued)
         .flatMap((explorer) => room.tiles
-          .filter((tile) => tile.isRescue && areAdjacent(coord(room, explorer.locationId!)!, tile))
+          .filter((tile) =>
+            tile.isRescue &&
+            areAdjacent(coord(room, explorer.locationId!)!, tile) &&
+            hasExplorerCapacity(room, tile.id, 1, [explorer.id])
+          )
           .map((tile) => ({ explorer, targetId: tile.id })))
         .sort((a, b) => b.explorer.value - a.explorer.value)[0];
       if (rescueMove) {
@@ -1000,7 +1033,13 @@ export function runAITurn(room: GameRoom) {
           if (!from) return [];
           return [...room.waterSpaces, ...room.tiles.filter((tile) => !tile.active && !tile.blocked)]
             .filter((target) => areAdjacent(from, target) && !raftAt(room, target.id) &&
-              !room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === target.id))
+              !room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === target.id) &&
+              hasExplorerCapacity(
+                room,
+                target.id,
+                occupants(room, raft.id).length,
+                occupants(room, raft.id).map((explorer) => explorer.id)
+              ))
             .map((target) => ({
               raft,
               targetId: target.id,
@@ -1092,9 +1131,7 @@ function checkFinished(room: GameRoom) {
 }
 
 export function publicState(room: GameRoom, viewerId?: string): PublicRoomState {
-  const nextPrivateExplorerId = room.turnPhase === "setup-explorer" && room.currentPlayerId === viewerId
-    ? room.explorers.find((explorer) => explorer.ownerId === viewerId && !explorer.locationId)?.id
-    : undefined;
+  const placementValuesVisible = room.turnPhase === "setup-explorer" || room.turnPhase === "setup-raft";
   return {
     code: room.code, phase: room.phase, hostId: room.hostId, revision: room.revision,
     players: room.players.map((player) => ({ ...player, abilities: player.id === viewerId ? player.abilities : [] })),
@@ -1106,10 +1143,13 @@ export function publicState(room: GameRoom, viewerId?: string): PublicRoomState 
     waterSpaces: room.waterSpaces,
     explorers: room.explorers.map((explorer) => ({
       ...explorer,
-      value: explorer.rescued || explorer.id === nextPrivateExplorerId ? explorer.value : undefined
+      value: explorer.rescued || (placementValuesVisible && explorer.ownerId === viewerId)
+        ? explorer.value
+        : undefined
     })),
     rafts: room.rafts, creatures: room.creatures,
-    currentPlayerId: room.currentPlayerId, turnPhase: room.turnPhase, creatureRoll: room.creatureRoll,
+    currentPlayerId: room.currentPlayerId, turnPhase: room.turnPhase,
+    creatureRoll: room.creatureRoll, creatureRollId: room.creatureRollId,
     pendingChoice: room.pendingChoice, actionsLeft: room.actionsLeft, round: room.round,
     volcanoes: room.volcanoes, maxVolcanoes: room.maxVolcanoes, log: room.log.slice(-16),
     events: room.events.slice(-60).map(({ payload, ...event }) => ({

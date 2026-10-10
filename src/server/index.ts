@@ -74,6 +74,7 @@ const normalizeRoom = (room: GameRoom): GameRoom => ({
   })),
   creatureMovesRemaining: room.creatureMovesRemaining ?? 0,
   creatureMoved: room.creatureMoved ?? false,
+  creatureRollId: room.creatureRollId ?? 0,
   turnStartedWithoutExplorers: room.turnStartedWithoutExplorers ?? false,
   pendingAttack: room.pendingAttack ?? null,
   displacementQueue: room.displacementQueue ?? [],
@@ -125,7 +126,7 @@ function sessionFor(room: GameRoom, socketId: string): SessionView {
 }
 
 function persistRooms() {
-  const serializable = [...rooms.values()].map(({ aiTimer: _timer, ...room }) => room);
+  const serializable = [...rooms.values()].map(({ aiTimer: _aiTimer, creatureSkipTimer: _skipTimer, ...room }) => room);
   writeFileSync(snapshotPath, JSON.stringify(serializable, null, 2));
 }
 
@@ -139,11 +140,37 @@ function broadcast(room: GameRoom) {
     if (socketId) io.to(socketId).emit("state", publicState(room, spectator.id));
   }
   persistRooms();
+  scheduleCreatureSkip(room);
   scheduleAI(room);
+}
+
+function scheduleCreatureSkip(room: GameRoom) {
+  if (
+    room.creatureSkipTimer ||
+    room.phase !== "playing" ||
+    room.turnPhase !== "creature-move" ||
+    room.pendingChoice?.type !== "move-creature" ||
+    !room.pendingChoice.autoSkipReason ||
+    !room.currentPlayerId
+  ) return;
+  const playerId = room.currentPlayerId;
+  room.creatureSkipTimer = setTimeout(() => {
+    room.creatureSkipTimer = undefined;
+    if (
+      room.phase !== "playing" ||
+      room.currentPlayerId !== playerId ||
+      room.turnPhase !== "creature-move" ||
+      room.pendingChoice?.type !== "move-creature" ||
+      !room.pendingChoice.autoSkipReason
+    ) return;
+    finishCreatureMovement(room, playerId);
+    broadcast(room);
+  }, 2600);
 }
 
 function scheduleAI(room: GameRoom) {
   if (room.aiTimer || room.phase !== "playing") return;
+  if (room.pendingChoice?.type === "move-creature" && room.pendingChoice.autoSkipReason) return;
   const responseAI = room.pendingChoice?.type === "repellent"
     ? room.players.find((player) =>
       player.isAI &&

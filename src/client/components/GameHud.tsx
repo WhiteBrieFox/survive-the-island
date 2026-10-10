@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, Bot, ChevronRight, Clock3, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
   LogOut, Navigation, ScrollText, Shield, Users, Waves, X
@@ -35,6 +35,9 @@ export function GameHud({
   const [boardingIds, setBoardingIds] = useState<string[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [creatureRollVisible, setCreatureRollVisible] = useState(false);
+  const [creatureRollSettled, setCreatureRollSettled] = useState(false);
+  const announcedAutoSkipRoll = useRef(0);
   const boardingChoice = room.pendingChoice?.type === "board-raft" ? room.pendingChoice : null;
   const recentEvents = room.events.slice(-5).reverse();
   const selectedEvent = room.events.find((event) => event.id === selectedEventId) ?? room.events.at(-1);
@@ -47,6 +50,38 @@ export function GameHud({
   useEffect(() => {
     setBoardingIds([]);
   }, [boardingChoice?.raftId]);
+
+  useEffect(() => {
+    const event = room.events.find((candidate) => candidate.id === room.creatureRollId);
+    if (!room.creatureRoll || !event) return;
+    const age = Date.now() - new Date(event.at).getTime();
+    if (age >= 6000) {
+      setCreatureRollVisible(false);
+      return;
+    }
+    setCreatureRollVisible(true);
+    setCreatureRollSettled(false);
+    const settleTimer = window.setTimeout(() => setCreatureRollSettled(true), 1350);
+    const hideTimer = window.setTimeout(() => setCreatureRollVisible(false), 5000);
+    return () => {
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [room.creatureRollId]);
+
+  useEffect(() => {
+    const reason = room.pendingChoice?.type === "move-creature"
+      ? room.pendingChoice.autoSkipReason
+      : undefined;
+    if (!reason || announcedAutoSkipRoll.current === room.creatureRollId) return;
+    announcedAutoSkipRoll.current = room.creatureRollId;
+    const creature = room.creatureRoll === "sea-serpent"
+      ? "海蛇"
+      : room.creatureRoll === "shark" ? "鲨鱼" : "巨兽";
+    showNotice(reason === "missing"
+      ? `场上没有${creature}，本次生物移动自动跳过`
+      : `场上的${creature}都无法移动，本次自动跳过`);
+  }, [room.creatureRoll, room.creatureRollId, room.pendingChoice, showNotice]);
 
   const current = room.players.find((player) => player.id === room.currentPlayerId);
   const dayStage = dayStageFor(room);
@@ -68,8 +103,13 @@ export function GameHud({
   const rolledCreatureName = room.pendingChoice?.creatureType === "sea-serpent"
     ? "海蛇"
     : room.pendingChoice?.creatureType === "shark" ? "鲨鱼" : "巨兽";
+  const visibleCreatureRollName = room.creatureRoll === "sea-serpent"
+    ? "海蛇"
+    : room.creatureRoll === "shark" ? "鲨鱼" : "巨兽";
   const hasRolledCreature = room.pendingChoice?.type === "move-creature" &&
     room.creatures.some((creature) => creature.type === room.pendingChoice?.creatureType);
+  const autoSkippingCreature = room.pendingChoice?.type === "move-creature" &&
+    Boolean(room.pendingChoice.autoSkipReason);
   const abilityNames: Record<AbilityType, string> = {
     paddles: "船桨", dolphin: "海豚", dive: "潜水", "creature-die": "生物骰", repellent: "驱逐剂"
   };
@@ -190,6 +230,13 @@ export function GameHud({
         <ScrollText size={18} />
       </button>
 
+      {creatureRollVisible && (
+        <div className={`creature-die-callout ${creatureRollSettled ? "settled" : ""}`}>
+          <span><Dices size={14} />{creatureRollSettled ? "生物骰结果" : "生物骰滚动中"}</span>
+          <strong>{creatureRollSettled ? visibleCreatureRollName : "..."}</strong>
+        </div>
+      )}
+
       {logOpen && (
         <div className="log-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setLogOpen(false);
@@ -284,7 +331,7 @@ export function GameHud({
         </div>
       )}
 
-      {myTurn && room.phase === "playing" && room.turnPhase === "creature-move" && (
+      {myTurn && room.phase === "playing" && room.turnPhase === "creature-move" && !autoSkippingCreature && (
         <div className="turn-actions phase-prompt">
           {room.pendingChoice?.type === "move-creature" && (
             <>

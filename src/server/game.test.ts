@@ -52,7 +52,7 @@ function settlePendingChoices(room: Room, playerId: string) {
 }
 
 function finishCreaturePhase(room: Room, playerId: string) {
-  rollCreatureDie(room, playerId);
+  if (room.turnPhase === "creature") rollCreatureDie(room, playerId);
   for (let guard = 0; guard < 30 && room.currentPlayerId === playerId && room.turnPhase === "creature-move"; guard += 1) {
     if (room.pendingChoice?.type === "repellent") {
       const responder = room.pendingChoice.responderIds?.find((id) => !room.pendingChoice?.declinedIds?.includes(id));
@@ -65,7 +65,10 @@ function finishCreaturePhase(room: Room, playerId: string) {
     }
     const creature = room.creatures.find((item) => item.id === room.pendingChoice?.creatureId) ??
       room.creatures.find((item) => item.type === room.pendingChoice?.creatureType);
-    if (!creature) break;
+    if (!creature) {
+      finishCreatureMovement(room, playerId);
+      break;
+    }
     const source = [...room.tiles, ...room.waterSpaces].find((item) => item.id === creature.locationId)!;
     const target = [...room.waterSpaces, ...room.tiles.filter((tile) => !tile.isRescue)]
       .find((item) => areAdjacent(source, item) && (creature.type === "kaiju" || room.waterSpaces.some((water) => water.id === item.id)));
@@ -124,18 +127,85 @@ describe("complete game core", () => {
     explorer.swimming = false;
     moveExplorer(room, "host", explorer.id, rescue.id);
     expect(explorer.rescued).toBe(true);
+    expect(explorer.locationId).toBe(rescue.id);
+    expect(explorer.raftId).toBeNull();
   });
 
-  it("shows treasure only during placement and after rescue", () => {
+  it("shows all owned treasure values throughout placement and hides them when turns begin", () => {
     const room = createRoom("ABC123", "host", "船长");
     room.players[0].ready = true;
     addPlayer(room, "guest", "水手");
     room.players[1].ready = true;
     startGame(room);
-    expect(publicState(room, "host").explorers.filter((item) => item.value !== undefined)).toHaveLength(1);
+    expect(publicState(room, "host").explorers.filter((item) => item.ownerId === "host" && item.value !== undefined)).toHaveLength(20);
     expect(publicState(room, "guest").explorers.filter((item) => item.ownerId === "host").every((item) => item.value === undefined)).toBe(true);
-    completeSetup(room);
+    while (room.turnPhase === "setup-explorer") {
+      const playerId = room.currentPlayerId!;
+      const tile = room.tiles.find((candidate) => {
+        const count = room.explorers.filter((explorer) => explorer.locationId === candidate.id).length;
+        return candidate.active && !candidate.isRescue && count < (room.players.length === 5 && room.setupPlaced >= 40 ? 2 : 1);
+      })!;
+      placeExplorer(room, playerId, tile.id);
+    }
+    expect(publicState(room, "host").explorers.filter((item) => item.ownerId === "host" && item.value !== undefined)).toHaveLength(20);
+    while (room.turnPhase === "setup-raft") {
+      const playerId = room.currentPlayerId!;
+      const water = room.waterSpaces.find((space) =>
+        !room.rafts.some((raft) => raft.locationId === space.id) &&
+        room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(space, tile))
+      )!;
+      placeRaft(room, playerId, water.id);
+    }
     expect(publicState(room, "host").explorers.every((item) => item.value === undefined)).toBe(true);
+  });
+
+  it("limits every destination to five explorers", () => {
+    const room = startedRoom();
+    const target = room.tiles.find((tile) => tile.active && !tile.isRescue)!;
+    const source = room.tiles.find((tile) => tile.active && !tile.isRescue && areAdjacent(tile, target))!;
+    const explorers = room.explorers.slice(0, 6);
+    explorers.slice(0, 5).forEach((explorer) => {
+      explorer.locationId = explorer.tileId = target.id;
+      explorer.raftId = null;
+      explorer.swimming = false;
+      explorer.lost = false;
+      explorer.rescued = false;
+    });
+    const moving = explorers[5];
+    moving.ownerId = "host";
+    moving.locationId = moving.tileId = source.id;
+    moving.raftId = null;
+    moving.swimming = false;
+    moving.lost = false;
+    moving.rescued = false;
+
+    expect(() => moveExplorer(room, "host", moving.id, target.id)).toThrow(/最多容纳 5 名/);
+  });
+
+  it("prevents a loaded raft from entering a space that would exceed five explorers", () => {
+    const room = startedRoom();
+    const raft = room.rafts[0];
+    const source = room.waterSpaces.find((space) => space.id === raft.locationId)!;
+    const target = room.waterSpaces.find((space) =>
+      areAdjacent(source, space) && !room.rafts.some((candidate) => candidate.locationId === space.id)
+    )!;
+    const hostExplorers = room.explorers.filter((explorer) => explorer.ownerId === "host").slice(0, 6);
+    hostExplorers.slice(0, 3).forEach((explorer) => {
+      explorer.locationId = explorer.tileId = source.id;
+      explorer.raftId = raft.id;
+      explorer.swimming = false;
+      explorer.lost = false;
+      explorer.rescued = false;
+    });
+    hostExplorers.slice(3).forEach((explorer) => {
+      explorer.locationId = explorer.tileId = target.id;
+      explorer.raftId = null;
+      explorer.swimming = true;
+      explorer.lost = false;
+      explorer.rescued = false;
+    });
+
+    expect(() => moveRaft(room, "host", raft.id, target.id)).toThrow(/最多容纳 5 名/);
   });
 
   it("only exposes volcano and whirlpool effects after their tile is revealed", () => {
@@ -253,7 +323,7 @@ describe("complete game core", () => {
     expect(room.turnPhase).toBe("action");
   });
 
-  it("automatically skips a creature roll when none of that type can move", () => {
+  it("holds a missing creature result briefly before advancing", () => {
     const room = startedRoom();
     endTurn(room);
     const tile = room.tiles.find((candidate) => candidate.active && !candidate.isRescue && candidate.terrain === "beach")!;
@@ -268,6 +338,15 @@ describe("complete game core", () => {
       random.mockRestore();
     }
 
+    expect(room.currentPlayerId).toBe("host");
+    expect(room.turnPhase).toBe("creature-move");
+    expect(room.pendingChoice).toMatchObject({
+      type: "move-creature",
+      creatureType: "shark",
+      autoSkipReason: "missing"
+    });
+
+    finishCreatureMovement(room, "host");
     expect(room.currentPlayerId).toBe("guest");
     expect(room.turnPhase).toBe("action");
     expect(room.log.at(-2)).toMatch(/没有可移动的鲨鱼/);
@@ -495,7 +574,7 @@ describe("complete game core", () => {
     startGame(room);
     const hostView = publicState(room, "host");
     const guestView = publicState(room, "guest");
-    expect(hostView.explorers.filter((explorer) => explorer.value !== undefined)).toHaveLength(1);
+    expect(hostView.explorers.filter((explorer) => explorer.ownerId === "host" && explorer.value !== undefined)).toHaveLength(20);
     expect(guestView.explorers.filter((explorer) => explorer.ownerId === "host").every((explorer) => explorer.value === undefined)).toBe(true);
     expect(hostView.events.every((event) => event.payload === undefined)).toBe(true);
     placeExplorer(room, "host", room.tiles.find((tile) => !tile.isRescue)!.id);
