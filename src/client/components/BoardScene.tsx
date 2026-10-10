@@ -282,24 +282,48 @@ function Explorer({
   const tile = tiles.find((candidate) => candidate.id === explorer.locationId);
   if (!tile || explorer.rescued || explorer.lost) return null;
   const { x, z } = hexToWorld(tile);
-  const angle = (index % 8) * (Math.PI / 4);
-  const radius = index === 0 ? 0 : 0.42;
   const raftSeats: Array<[number, number]> = [[-0.28, 0.16], [0.28, 0.16], [0, -0.28]];
+  const landSeats: Array<[number, number]> = [
+    [0.48, 0.5],
+    [-0.16, 0.64],
+    [0.66, -0.08],
+    [-0.62, 0.18],
+    [0.2, -0.62],
+    [-0.42, -0.5]
+  ];
+  const swimSeats: Array<[number, number]> = [[0, 0], [0.28, 0.2], [-0.28, 0.2], [0, -0.3]];
   const raftSeat = raftSeats[index % raftSeats.length];
-  const offsetX = explorer.raftId ? raftSeat[0] : Math.cos(angle) * radius;
-  const offsetZ = explorer.raftId ? raftSeat[1] : Math.sin(angle) * radius;
+  const landSeat = landSeats[index % landSeats.length];
+  const swimSeat = swimSeats[index % swimSeats.length];
+  const [offsetX, offsetZ] = explorer.raftId
+    ? raftSeat
+    : explorer.swimming
+      ? swimSeat
+      : landSeat;
+  const terrainHeight = "terrain" in tile && tile.active
+    ? tile.terrain === "mountain" ? 0.62 : 0.42
+    : -0.04;
+  const facing = explorer.raftId || explorer.swimming
+    ? 0
+    : Math.atan2(-offsetX, -offsetZ);
 
   return (
     <Float speed={selected ? 4 : 1.4} rotationIntensity={0} floatIntensity={selected ? 0.2 : 0.05}>
       <group
-        position={[x + offsetX, explorer.raftId ? 0.23 : explorer.swimming ? -0.04 : 0.38, z + offsetZ]}
+        position={[x + offsetX, explorer.raftId ? 0.23 : terrainHeight, z + offsetZ]}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
         }}
         scale={selected ? 1.18 : 1}
       >
-        <AssetModel name="explorer" color={color} rotation={[0, angle + Math.PI, 0]} scale={0.27} />
+        <AssetModel name="explorer" color={color} rotation={[0, facing, 0]} scale={0.3} />
+        {!explorer.raftId && !explorer.swimming && (
+          <mesh rotation-x={-Math.PI / 2} position-y={0.015}>
+            <circleGeometry args={[0.22, 24]} />
+            <meshBasicMaterial color={color} transparent opacity={0.72} />
+          </mesh>
+        )}
         {selected && (
           <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
             <ringGeometry args={[0.28, 0.36, 24]} />
