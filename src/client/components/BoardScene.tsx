@@ -14,6 +14,7 @@ import type {
 import { areAdjacent, createIslandCoords, hexToWorld } from "../../shared/hex";
 import { dayStageFor, type DayStage } from "../dayCycle";
 import { useGameStore } from "../gameStore";
+import { prepareHeroModel, type HeroModelName } from "../heroModelMaterials";
 import { socket } from "../socket";
 
 const colorMap: Record<PlayerColor, string> = {
@@ -123,6 +124,7 @@ function AnimatedMover({
 }
 
 const modelPath = (name: string) => `/assets/models-preview/${name}.glb`;
+const heroModelPath = (name: HeroModelName) => `/assets/models-hero/${name}-hyper3d-pbr.glb`;
 
 type AssetModelProps = {
   name: string;
@@ -180,6 +182,26 @@ function AssetModel({
   );
 }
 
+function HeroAssetModel({
+  name,
+  color,
+  position = [0, 0, 0],
+  rotation = [0, 0, 0],
+  scale = 1
+}: Omit<AssetModelProps, "name" | "animate"> & { name: HeroModelName }) {
+  const { scene } = useGLTF(heroModelPath(name));
+  const model = useMemo(
+    () => prepareHeroModel(scene, name, color),
+    [color, name, scene]
+  );
+
+  return (
+    <group position={position} rotation={rotation} scale={scale}>
+      <primitive object={model} />
+    </group>
+  );
+}
+
 [
   "explorer",
   "shark",
@@ -198,6 +220,9 @@ function AssetModel({
   "terrain-forest",
   "terrain-mountain"
 ].forEach((name) => useGLTF.preload(modelPath(name)));
+
+(["explorer", "shark", "sea-serpent", "kaiju", "raft"] satisfies HeroModelName[])
+  .forEach((name) => useGLTF.preload(heroModelPath(name)));
 
 function tileVariant(id: string, count: number) {
   let value = 0;
@@ -604,7 +629,7 @@ function Explorer({
   const modelRotation: [number, number, number] = explorer.swimming
     ? [-1.18, facing, 0]
     : [0, facing, 0];
-  const modelScale = explorer.swimming ? 0.27 : 0.3;
+  const modelScale = explorer.swimming ? 0.32 : 0.37;
 
   return (
     <Float
@@ -623,7 +648,7 @@ function Explorer({
           }}
           scale={selected ? 1.18 : 1}
         >
-          <AssetModel name="explorer" color={color} rotation={modelRotation} scale={modelScale} />
+          <HeroAssetModel name="explorer" color={color} rotation={modelRotation} scale={modelScale} />
           {explorer.swimming && (
             <group position-y={0.02}>
               <mesh rotation-x={-Math.PI / 2}>
@@ -712,7 +737,7 @@ function RaftPiece({ raft, space, selected, onClick }: { raft: RaftView; space: 
         scale={selected ? 1.12 : 1}
         onClick={(event) => { event.stopPropagation(); onClick(); }}
       >
-        <AssetModel name="raft" scale={0.72} />
+        <HeroAssetModel name="raft" scale={0.7} />
         {selected && (
           <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
             <ringGeometry args={[0.68, 0.82, 24]} />
@@ -741,12 +766,12 @@ function CreaturePiece({
   const activeLand = "terrain" in space && space.active && !space.isRescue;
   const landHeight = activeLand ? (space.terrain === "mountain" ? 0.56 : 0.36) : 0;
   const settings = creature.type === "shark"
-    ? { name: "shark", scale: 0.38, y: 0.02, rotation: -0.5, x: 0, z: 0 }
+    ? { name: "shark" as const, scale: 0.5, y: 0.02, rotation: -0.5, x: 0, z: 0 }
     : creature.type === "sea-serpent"
-      ? { name: "sea-serpent", scale: 0.4, y: 0.02, rotation: 0.35, x: 0, z: 0 }
+      ? { name: "sea-serpent" as const, scale: 0.52, y: 0.02, rotation: 0.35, x: 0, z: 0 }
       : {
-          name: "kaiju",
-          scale: activeLand ? 0.31 : 0.34,
+          name: "kaiju" as const,
+          scale: activeLand ? 0.4 : 0.43,
           y: activeLand ? landHeight : 0.12,
           rotation: 0.15,
           x: placement?.x ?? 0,
@@ -767,7 +792,7 @@ function CreaturePiece({
           scale={selected ? 1.2 : 1}
           onClick={(event) => { event.stopPropagation(); onClick(); }}
         >
-          <AssetModel
+          <HeroAssetModel
             name={settings.name}
             rotation={[0, settings.rotation + tileVariant(creature.id, 8) * Math.PI / 4, 0]}
             scale={settings.scale}
