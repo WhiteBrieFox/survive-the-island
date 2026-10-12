@@ -28,14 +28,12 @@ export function LobbyPanel({
   const startGame = () => {
     socket.emit("startGame", (result) => {
       if (!result.ok) showNotice(result.error ?? "无法开始");
-      else window.location.reload();
     });
   };
 
   const addAI = () => {
     socket.emit("addAI", aiDifficulty, (result) => {
       if (!result.ok) showNotice(result.error ?? "添加 AI 失败");
-      else window.location.reload();
     });
   };
 
@@ -83,7 +81,6 @@ export function LobbyPanel({
                 title="移除 AI"
                 onClick={() => socket.emit("removeAI", player.id, (result) => {
                   if (!result.ok) showNotice(result.error ?? "移除失败");
-                  else window.location.reload();
                 })}
               >
                 <Trash2 size={16} />
@@ -106,7 +103,6 @@ export function LobbyPanel({
             className={me.ready ? "secondary-command" : "primary-command"}
             onClick={() => socket.emit("setReady", !me.ready, (result) => {
               if (!result.ok) showNotice(result.error ?? "无法切换准备状态");
-              else window.location.reload();
             })}
           >
             <Check size={18} />

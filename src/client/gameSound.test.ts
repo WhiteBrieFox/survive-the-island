@@ -14,6 +14,7 @@ describe("soundForGameEvent", () => {
     expect(soundForGameEvent(event("raft-revealed"), room)).toBe("raft-reveal");
     expect(soundForGameEvent(event("ability-drawn"), room)).toBe("ability-draw");
     expect(soundForGameEvent(event("game-finished"), room)).toBe("game-finish");
+    expect(soundForGameEvent(event("turn-started"), room)).toBeNull();
   });
 
   it("uses different movement sounds on land and in water", () => {

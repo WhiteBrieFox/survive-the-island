@@ -1,0 +1,259 @@
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #eef8f5;
+  background: #07191d;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+}
+
+.hazard-shell {
+  position: relative;
+  width: 100vw;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+  background: #07191d;
+}
+
+#hazard-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.topbar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  min-height: 76px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(210, 246, 238, 0.14);
+  background: rgba(5, 23, 27, 0.78);
+  backdrop-filter: blur(14px);
+}
+
+.title-block {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: #8edfd4;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode-switch {
+  display: flex;
+  padding: 3px;
+  border: 1px solid rgba(210, 246, 238, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-switch button {
+  height: 34px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 5px;
+  color: #b9d1cc;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  color: #07211f;
+  background: #8edfd4;
+  font-weight: 800;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(210, 246, 238, 0.24);
+  border-radius: 7px;
+  color: #eef8f5;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  border-color: #8edfd4;
+  background: rgba(142, 223, 212, 0.13);
+}
+
+.info-panel {
+  position: absolute;
+  z-index: 2;
+  left: 20px;
+  bottom: 20px;
+  width: min(370px, calc(100% - 40px));
+  padding: 16px;
+  border: 1px solid rgba(210, 246, 238, 0.18);
+  border-radius: 8px;
+  background: rgba(5, 23, 27, 0.82);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(14px);
+}
+
+.info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-heading strong {
+  font-size: 18px;
+}
+
+.status-badge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 4px;
+  color: #ffd6a1;
+  background: rgba(221, 113, 37, 0.2);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.status-badge.hyper {
+  color: #aef2e8;
+  background: rgba(37, 176, 157, 0.2);
+}
+
+.description {
+  min-height: 40px;
+  margin: 8px 0 14px;
+  color: #a9c3be;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.metrics {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.metrics div {
+  min-width: 0;
+  padding-top: 9px;
+  border-top: 1px solid rgba(210, 246, 238, 0.12);
+}
+
+.metrics dt {
+  color: #76928d;
+  font-size: 10px;
+}
+
+.metrics dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #aef2e8;
+  font-weight: 800;
+  background: #07191d;
+  transition: opacity 180ms ease;
+}
+
+.loading.hidden {
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (max-width: 680px) {
+  .hazard-shell {
+    min-height: 520px;
+  }
+
+  .topbar {
+    min-height: 112px;
+    padding: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  h1 {
+    font-size: 18px;
+  }
+
+  .toolbar {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mode-switch {
+    flex: 1;
+  }
+
+  .mode-switch button {
+    flex: 1;
+  }
+
+  .info-panel {
+    left: 12px;
+    bottom: 12px;
+    width: calc(100% - 24px);
+    padding: 13px;
+  }
+
+  .description {
+    margin-bottom: 10px;
+  }
+}

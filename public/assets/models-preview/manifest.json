@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-10",
+  "generatedAt": "2026-10-11",
   "status": "preview-only",
   "integratedIntoGame": false,
   "sourceReferences": "/art-source/mira",
@@ -29,6 +29,14 @@
       ]
     },
     {
+      "file": "tree-palm-hyper3d.glb",
+      "triangles": 37133,
+      "meshes": 1,
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "e7e174c4-0ee3-4f7d-baa7-ff7a4657a3fe"
+    },
+    {
       "file": "tree-coastal.glb",
       "triangles": 3576,
       "meshes": 6,
@@ -37,12 +45,28 @@
       ]
     },
     {
+      "file": "tree-coastal-hyper3d.glb",
+      "triangles": 34706,
+      "meshes": 1,
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "0b36ace7-06cb-4dae-9bfd-0079d1d65210"
+    },
+    {
       "file": "tree-jungle.glb",
       "triangles": 3472,
       "meshes": 6,
       "animations": [
         "Sway"
       ]
+    },
+    {
+      "file": "tree-jungle-hyper3d.glb",
+      "triangles": 31878,
+      "meshes": 1,
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "a49cbb96-ef36-4c27-a88b-e1616f72f341"
     },
     {
       "file": "kaiju.glb",
@@ -93,6 +117,16 @@
       ]
     },
     {
+      "file": "rescue-dock-hyper3d.glb",
+      "triangles": 20000,
+      "meshes": 1,
+      "animations": [],
+      "source": "Hyper3D Rodin",
+      "taskUuid": "46c8d26c-0656-45ed-9e35-2490fc1f604f",
+      "textureResolution": 512,
+      "compression": "Draco + WebP"
+    },
+    {
       "file": "whirlpool.glb",
       "triangles": 2700,
       "meshes": 2,
@@ -101,10 +135,22 @@
       ]
     },
     {
+      "file": "whirlpool-hyper3d.glb",
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "c60c445b-97e7-4cc3-ac59-cb7659e76f02"
+    },
+    {
       "file": "coral-reef.glb",
       "triangles": 1048,
       "meshes": 6,
       "animations": []
+    },
+    {
+      "file": "coral-reef-hyper3d.glb",
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "12a6eabf-f355-474c-99dd-3e1e72a6aa6a"
     },
     {
       "file": "floating-debris.glb",
@@ -115,10 +161,22 @@
       ]
     },
     {
+      "file": "floating-debris-hyper3d.glb",
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "66c91803-9806-4b2f-9fdb-1fe96ef258dd"
+    },
+    {
       "file": "terrain-beach.glb",
       "triangles": 5572,
       "meshes": 15,
       "animations": []
+    },
+    {
+      "file": "terrain-beach-hyper3d.glb",
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "df33281f-e82e-42df-8832-1b7e3c8fb80f"
     },
     {
       "file": "terrain-forest.glb",
@@ -127,10 +185,22 @@
       "animations": []
     },
     {
+      "file": "terrain-forest-hyper3d.glb",
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "82737bb6-6338-4dad-b8ee-1466253088b0"
+    },
+    {
       "file": "terrain-mountain.glb",
       "triangles": 1461,
       "meshes": 12,
       "animations": []
+    },
+    {
+      "file": "terrain-mountain-hyper3d.glb",
+      "animations": [],
+      "candidateSource": "Hyper3D Rodin",
+      "taskUuid": "72df244a-579f-40b8-9039-b05a04c4b733"
     }
   ]
 }

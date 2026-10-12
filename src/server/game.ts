@@ -9,6 +9,7 @@ import {
   type CreatureView,
   type ExplorerView,
   type GameEventView,
+  type MapMarkerView,
   type PlayerView,
   type PublicRoomState,
   type RaftView,
@@ -46,6 +47,7 @@ export interface GameRoom {
   explorers: GameExplorer[];
   rafts: RaftView[];
   creatures: CreatureView[];
+  markers: MapMarkerView[];
   currentPlayerId: string | null;
   turnPhase: TurnPhase;
   creatureRoll: CreatureRoll | null;
@@ -73,6 +75,7 @@ export interface GameRoom {
   spectatorTokens: Record<string, string>;
   aiTimer?: NodeJS.Timeout;
   creatureSkipTimer?: NodeJS.Timeout;
+  markerTimer?: NodeJS.Timeout;
 }
 
 const TREASURES = [1, 1, 1, 2, 2, 2, 3, 3, 4, 5];
@@ -109,7 +112,7 @@ export function createRoom(code: string, hostId: string, hostName: string, passw
   const room: GameRoom = {
     code, phase: "lobby", hostId, password, revision: 0,
     players: [makePlayer(hostId, hostName, PLAYER_COLORS[0], false)], spectators: [],
-    tiles: [], waterSpaces: [], explorers: [], rafts: [], creatures: [],
+    tiles: [], waterSpaces: [], explorers: [], rafts: [], creatures: [], markers: [],
     currentPlayerId: null, turnPhase: "setup-explorer", creatureRoll: null, creatureRollId: 0, pendingChoice: null,
     actionsLeft: 3, risingRemaining: 1, round: 1, volcanoes: 0, maxVolcanoes: 3,
     log: [], events: [], winnerIds: [], setupPlaced: 0, resumePhase: null,
@@ -140,19 +143,19 @@ export function addSpectator(room: GameRoom, id: string, name: string) {
 
 function rescueCoords() {
   return [
-    { q: -2, r: -5 },
-    { q: 7, r: -5 },
-    { q: -7, r: 5 },
-    { q: 2, r: 5 }
+    { q: -2, r: -6 },
+    { q: 8, r: -6 },
+    { q: -8, r: 6 },
+    { q: 2, r: 6 }
   ];
 }
 
 function waterSpaces(tiles: TileView[]) {
   const occupied = new Set(tiles.map(hexKey));
   const result: WaterSpaceView[] = [];
-  for (let q = -7; q <= 7; q += 1) for (let r = -7; r <= 7; r += 1) {
+  for (let q = -8; q <= 8; q += 1) for (let r = -8; r <= 8; r += 1) {
     const coord = { q, r };
-    if (hexDistance({ q: 0, r: 0 }, coord) <= 7 && !occupied.has(hexKey(coord))) result.push({ ...coord, id: `water-${q}-${r}` });
+    if (hexDistance({ q: 0, r: 0 }, coord) <= 8 && !occupied.has(hexKey(coord))) result.push({ ...coord, id: `water-${q}-${r}` });
   }
   return result;
 }
@@ -165,9 +168,10 @@ export function startGame(room: GameRoom) {
     room.players[0].colors = [PLAYER_COLORS[0], PLAYER_COLORS[2]];
     room.players[1].colors = [PLAYER_COLORS[1], PLAYER_COLORS[3]];
   }
+  room.players = shuffle(room.players);
   const kinds = shuffle(TERRAIN);
   const pools = { beach: shuffle(EFFECTS.beach), forest: shuffle(EFFECTS.forest), mountain: shuffle(EFFECTS.mountain) };
-  const island: GameTile[] = createIslandCoords(40).map((coord, index) => {
+  const island: GameTile[] = createIslandCoords(40, { excludeCenter: true }).map((coord, index) => {
     const terrain = kinds[index];
     return { ...coord, id: `tile-${index}`, terrain, active: true, sinking: false, blocked: false, effect: pools[terrain].pop()! };
   });
@@ -192,22 +196,17 @@ export function startGame(room: GameRoom) {
       .filter((space) => areAdjacent(space, rescue))
       .sort((a, b) => hexDistance({ q: 0, r: 0 }, a) - hexDistance({ q: 0, r: 0 }, b))[0]
   );
-  const guardedIds = new Set(guardedSpaces.map((space) => space.id));
-  const fifthSerpentSpace = [...room.waterSpaces]
-    .filter((space) => !guardedIds.has(space.id))
-    .sort((a, b) => {
-      const distanceA = Math.min(...guardedSpaces.map((guard) => hexDistance(a, guard)));
-      const distanceB = Math.min(...guardedSpaces.map((guard) => hexDistance(b, guard)));
-      return distanceB - distanceA;
-    })[0];
-  room.creatures = [...guardedSpaces, fifthSerpentSpace].map((space, index) => ({
+  const centerSerpentSpace = room.waterSpaces.find((space) => space.q === 0 && space.r === 0);
+  if (!centerSerpentSpace) throw new Error("中央海蛇起始格不存在");
+  room.creatures = [...guardedSpaces, centerSerpentSpace].map((space, index) => ({
     id: `sea-serpent-${index}`, type: "sea-serpent", locationId: space.id
   }));
   room.rafts = [];
   room.phase = "playing";
   room.currentPlayerId = room.players[0].id;
   room.turnPhase = "setup-explorer";
-  recordEvent(room, "game-started", "开始轮流放置探险者，放置时请记住宝藏价值", room.hostId, {
+  recordEvent(room, "game-started", `${room.players[0].name} 随机成为先手，开始轮流放置探险者`, room.hostId, {
+    turnOrder: room.players.map((player) => player.id),
     terrain: island.map((tile) => ({ id: tile.id, terrain: tile.terrain, effect: tile.effect })),
     treasureValues: room.explorers.map((explorer) => ({ id: explorer.id, ownerId: explorer.ownerId, value: explorer.value }))
   });
@@ -278,6 +277,9 @@ export function placeRaft(room: GameRoom, playerId: string, waterId: string) {
   const player = room.players.find((item) => item.id === playerId)!;
   const location = coord(room, waterId);
   if (!location || !isWater(room, waterId) || raftAt(room, waterId)) throw new Error("请选择空水域");
+  if (room.creatures.some((item) => item.type === "sea-serpent" && item.locationId === waterId)) {
+    throw new Error("海蛇所在水域不能放置木筏");
+  }
   if (!room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(location, tile))) throw new Error("木筏必须与岛屿相邻");
   room.rafts.push({ id: `raft-${randomUUID()}`, locationId: waterId });
   player.raftsToPlace -= 1;
@@ -327,7 +329,10 @@ function raftRoute(room: GameRoom, fromId: string, targetId: string, maxDistance
       areAdjacent(space, target) &&
       isWater(room, space.id) &&
       !raftAt(room, space.id) &&
-      !room.creatures.some((item) => item.type === "kaiju" && item.locationId === space.id)
+      !room.creatures.some((item) =>
+        (item.type === "kaiju" || item.type === "sea-serpent") &&
+        item.locationId === space.id
+      )
     )
     .sort((a, b) => {
       const swimmersA = room.explorers.filter((item) => item.locationId === a.id && item.swimming).length;
@@ -366,7 +371,9 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
   const targetTile = room.tiles.find((tile) => tile.id === targetId);
   if (targetTile?.blocked || room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) throw new Error("该格被巨兽或火山阻挡");
   if (targetTile?.isRescue && !explorer.raftId) throw new Error("必须乘木筏抵达救援岛");
-  if (!hasExplorerCapacity(room, targetId, 1, [explorer.id])) throw new Error("目标格最多容纳 5 名探险者");
+  if (!targetTile?.isRescue && !hasExplorerCapacity(room, targetId, 1, [explorer.id])) {
+    throw new Error("目标格最多容纳 5 名探险者");
+  }
   const destinationRaft = raftAt(room, targetId);
   if (destinationRaft && occupants(room, destinationRaft.id).length >= 3) throw new Error("木筏已经满员");
   const sourceStable = Boolean(explorer.raftId || room.tiles.some((tile) => tile.id === explorer.locationId && tile.active));
@@ -382,7 +389,8 @@ export function moveExplorer(room: GameRoom, playerId: string, explorerId: strin
   room.actionsLeft -= 1;
   const player = room.players.find((item) => item.id === playerId)!;
   if (targetTile?.isRescue) {
-    explorer.locationId = explorer.tileId = targetId;
+    explorer.locationId = null;
+    explorer.tileId = null;
     explorer.raftId = null;
     explorer.swimming = false;
     explorer.rescued = true;
@@ -468,11 +476,11 @@ function applyEffect(room: GameRoom, playerId: string, tile: GameTile) {
     room.volcanoes += 1;
     recordEvent(room, "volcano", `火山爆发（${room.volcanoes}/${room.maxVolcanoes}）`, playerId, { tileId: tile.id });
   } else if (tile.effect === "whirlpool") {
-    [tile.id, ...adjacentIds(room, tile.id).filter((id) => isWater(room, id))].forEach((id) => {
+    [tile.id, ...adjacentIds(room, tile.id)].forEach((id) => {
       eliminateAt(room, id, true, true);
       room.creatures = room.creatures.filter((item) => item.locationId !== id);
     });
-    recordEvent(room, "whirlpool", "漩涡吞噬了周围的一切", playerId, { tileId: tile.id });
+    recordEvent(room, "whirlpool", "漩涡吞噬了中心及周围一格内的一切", playerId, { tileId: tile.id });
   } else if (tile.effect === "shark" || tile.effect === "kaiju") {
     const creature = spawnCreature(room, tile.effect, tile.id);
     if (hasInteractionTarget(room, creature)) resolveCreatureInteraction(room, creature, tile.effect === "kaiju" ? "random" : "choose");
@@ -564,22 +572,24 @@ export function moveCreature(room: GameRoom, playerId: string, creatureId: strin
   requireTurn(room, playerId, "creature-move");
   if (room.pendingChoice?.type !== "move-creature") throw new Error("请先完成当前结算");
   const creature = room.creatures.find((item) => item.id === creatureId);
-  const from = creature ? coord(room, creature.locationId) : undefined;
-  const to = coord(room, targetId);
   if (!creature || creature.type !== room.pendingChoice?.creatureType) throw new Error("请选择骰子指定的生物");
-  if (!from || !to || !areAdjacent(from, to)) throw new Error("生物必须逐格移动");
-  if (creature.type !== "kaiju" && !isWater(room, targetId)) throw new Error("该生物只能在水域移动");
-  if (room.tiles.find((tile) => tile.id === targetId)?.isRescue) throw new Error("生物不能进入救援岛");
-  if (creature.type !== "kaiju" && room.creatures.some((item) => item.type === "kaiju" && item.locationId === targetId)) throw new Error("巨兽阻挡了目标");
-  if (creature.type === "kaiju" && room.creatures.some((item) => item.id !== creature.id && item.type === "kaiju" && item.locationId === targetId)) {
-    throw new Error("巨兽不能进入另一只巨兽所在格");
-  }
+  const route = creatureRoute(room, creature, targetId, room.creatureMovesRemaining);
+  if (!route) throw new Error("目标不在本次可移动范围内");
   const sourceId = creature.locationId;
-  creature.locationId = targetId;
-  room.creatureMovesRemaining -= 1;
-  room.creatureMoved = true;
+  const traversed: string[] = [];
+  for (const locationId of route) {
+    creature.locationId = locationId;
+    traversed.push(locationId);
+    room.creatureMovesRemaining -= 1;
+    room.creatureMoved = true;
+    if (hasInteractionTarget(room, creature)) break;
+  }
   recordEvent(room, "creature-moved", `${creatureName(creature.type)}移动了`, playerId, {
-    creatureId, sourceId, targetId, stepsRemaining: room.creatureMovesRemaining
+    creatureId,
+    sourceId,
+    targetId: creature.locationId,
+    route: traversed,
+    stepsRemaining: room.creatureMovesRemaining
   });
   if (hasInteractionTarget(room, creature)) {
     room.interactionContinuation = "finish-creature";
@@ -620,7 +630,11 @@ export function finishCreatureMovement(room: GameRoom, playerId: string) {
 }
 
 function legalCreatureTargetIds(room: GameRoom, creature: CreatureView) {
-  const from = coord(room, creature.locationId);
+  return legalCreatureTargetIdsFrom(room, creature, creature.locationId);
+}
+
+function legalCreatureTargetIdsFrom(room: GameRoom, creature: CreatureView, fromId: string) {
+  const from = coord(room, fromId);
   if (!from) return [];
   return [...room.tiles, ...room.waterSpaces].filter((target) => {
     if (!areAdjacent(from, target)) return false;
@@ -633,6 +647,37 @@ function legalCreatureTargetIds(room: GameRoom, creature: CreatureView) {
     )) return false;
     return true;
   }).map((target) => target.id);
+}
+
+function creatureRoute(room: GameRoom, creature: CreatureView, targetId: string, maxSteps: number) {
+  if (targetId === creature.locationId || maxSteps < 1) return null;
+  const queue: Array<{ locationId: string; route: string[] }> = [{ locationId: creature.locationId, route: [] }];
+  const visited = new Set([creature.locationId]);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.route.length >= maxSteps) continue;
+    for (const nextId of legalCreatureTargetIdsFrom(room, creature, current.locationId)) {
+      if (visited.has(nextId)) continue;
+      const route = [...current.route, nextId];
+      if (nextId === targetId) return route;
+      visited.add(nextId);
+      if (hasInteractionTargetAt(room, creature, nextId)) continue;
+      queue.push({ locationId: nextId, route });
+    }
+  }
+  return null;
+}
+
+export function setMapMarker(room: GameRoom, playerId: string, locationId: string | null) {
+  const player = room.players.find((candidate) => candidate.id === playerId);
+  if (!player) throw new Error("只有玩家可以放置标记");
+  const existing = room.markers.find((marker) => marker.playerId === playerId);
+  if (locationId !== null && !coord(room, locationId)) throw new Error("标记位置不存在");
+  room.markers = room.markers.filter((marker) => marker.playerId !== playerId);
+  if (locationId !== null && existing?.locationId !== locationId) {
+    room.markers.push({ playerId, locationId, expiresAt: Date.now() + 6000 });
+  }
+  bump(room);
 }
 
 function finishCreatureMove(room: GameRoom) {
@@ -648,11 +693,37 @@ function finishCreatureMove(room: GameRoom) {
 }
 
 function hasInteractionTarget(room: GameRoom, creature: CreatureView) {
-  const explorers = room.explorers.filter((item) => item.locationId === creature.locationId && !item.lost && !item.rescued);
-  if (creature.type === "sea-serpent") return explorers.length > 0 || Boolean(raftAt(room, creature.locationId));
+  return hasInteractionTargetAt(room, creature, creature.locationId);
+}
+
+function hasInteractionTargetAt(room: GameRoom, creature: CreatureView, locationId: string) {
+  const explorers = room.explorers.filter((item) => item.locationId === locationId && !item.lost && !item.rescued);
+  if (creature.type === "sea-serpent") return explorers.length > 0 || Boolean(raftAt(room, locationId));
   if (creature.type === "shark") return explorers.some((item) => item.swimming);
-  return explorers.length > 0 || Boolean(raftAt(room, creature.locationId)) ||
-    room.creatures.some((item) => item.id !== creature.id && item.locationId === creature.locationId);
+  return explorers.length > 0 || Boolean(raftAt(room, locationId)) ||
+    room.creatures.some((item) => item.id !== creature.id && item.locationId === locationId);
+}
+
+function dolphinRoute(room: GameRoom, explorer: GameExplorer, targetId: string) {
+  if (!explorer.locationId) return null;
+  const from = coord(room, explorer.locationId);
+  const target = coord(room, targetId);
+  if (!from || !target) return null;
+  const distance = hexDistance(from, target);
+  if (distance < 1 || distance > 2) return null;
+  if (distance === 1) return [targetId];
+
+  const middle = [...room.tiles, ...room.waterSpaces]
+    .filter((space) =>
+      areAdjacent(from, space) &&
+      areAdjacent(space, target) &&
+      isWater(room, space.id) &&
+      !raftAt(room, space.id) &&
+      !room.creatures.some((creature) => creature.locationId === space.id) &&
+      hasExplorerCapacity(room, space.id, 1, [explorer.id])
+    )
+    .sort((a, b) => a.id.localeCompare(b.id))[0];
+  return middle ? [middle.id, targetId] : null;
 }
 
 function resolveInteractions(room: GameRoom, locationId: string) {
@@ -952,15 +1023,21 @@ export function useAbility(room: GameRoom, playerId: string, ability: AbilityTyp
     }
   } else if (ability === "dolphin") {
     const explorer = room.explorers.find((item) => item.id === actorId && item.ownerId === playerId && item.swimming);
-    const from = explorer?.locationId ? coord(room, explorer.locationId) : undefined;
     const to = targetId ? coord(room, targetId) : undefined;
-    if (!explorer || !from || !to || !targetId || hexDistance(from, to) > 2 ||
-      room.tiles.some((tile) => tile.id === targetId && tile.isRescue) ||
-      !hasExplorerCapacity(room, targetId, 1, [explorer.id])) throw new Error("海豚目标不合法或目标格已满");
+    const targetTile = targetId ? room.tiles.find((tile) => tile.id === targetId) : undefined;
+    const targetRaft = targetId ? raftAt(room, targetId) : undefined;
+    const route = explorer && targetId ? dolphinRoute(room, explorer, targetId) : null;
+    if (!explorer || !to || !targetId || !route ||
+      targetTile?.isRescue || targetTile?.blocked ||
+      room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === targetId) ||
+      !hasExplorerCapacity(room, targetId, 1, [explorer.id]) ||
+      Boolean(targetRaft && occupants(room, targetRaft.id).length >= 3)) {
+      throw new Error("海豚目标不合法或路径被阻挡");
+    }
     explorer.locationId = explorer.tileId = targetId;
-    const raft = raftAt(room, targetId);
-    explorer.raftId = raft && occupants(room, raft.id).length < 3 ? raft.id : null;
+    explorer.raftId = targetRaft?.id ?? null;
     explorer.swimming = isWater(room, targetId) && !explorer.raftId;
+    resolveInteractions(room, targetId);
   } else if (ability === "dive") {
     const creature = room.creatures.find((item) => item.id === actorId);
     if (!creature || !targetId || !isWater(room, targetId) || room.creatures.some((item) => item.locationId === targetId)) throw new Error("潜水目标不合法");
@@ -1006,7 +1083,13 @@ export function runAITurn(room: GameRoom) {
     const target = room.tiles.find((tile) => tile.active && !tile.isRescue && room.explorers.filter((item) => item.locationId === tile.id).length < (room.players.length === 5 && room.setupPlaced >= 40 ? 2 : 1));
     if (target) placeExplorer(room, player.id, target.id);
   } else if (room.turnPhase === "setup-raft") {
-    const target = room.waterSpaces.find((space) => !raftAt(room, space.id) && room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(space, tile)));
+    const target = room.waterSpaces.find((space) =>
+      !raftAt(room, space.id) &&
+      !room.creatures.some((creature) =>
+        creature.type === "sea-serpent" && creature.locationId === space.id
+      ) &&
+      room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(space, tile))
+    );
     if (target) placeRaft(room, player.id, target.id);
   } else if (room.turnPhase === "action") {
     while (room.actionsLeft > 0) {
@@ -1147,7 +1230,9 @@ export function publicState(room: GameRoom, viewerId?: string): PublicRoomState 
         ? explorer.value
         : undefined
     })),
-    rafts: room.rafts, creatures: room.creatures,
+    rafts: room.rafts,
+    creatures: room.creatures,
+    markers: room.markers.filter((marker) => marker.expiresAt > Date.now()),
     currentPlayerId: room.currentPlayerId, turnPhase: room.turnPhase,
     creatureRoll: room.creatureRoll, creatureRollId: room.creatureRollId,
     pendingChoice: room.pendingChoice, actionsLeft: room.actionsLeft, round: room.round,
@@ -1236,7 +1321,7 @@ function publicEventDetail(
     case "volcano":
       return `${spaceName(stringValue("tileId"))} 爆发火山；火山进度变为 ${room.volcanoes}/${room.maxVolcanoes}。`;
     case "whirlpool":
-      return `${spaceName(stringValue("tileId"))} 出现漩涡，吞噬该格及相邻水域中的探险者、木筏和生物。`;
+      return `${spaceName(stringValue("tileId"))} 出现漩涡，吞噬中心格及周围一格内的探险者、木筏和生物。`;
     case "raft-revealed":
       return `${spaceName(stringValue("tileId"))} 沉没后浮出一艘木筏；同格落水者会在容量允许时登船。`;
     case "ability-drawn":

@@ -72,7 +72,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
               <ol className="turn-timeline">
                 <li><b>1</b><div><strong>行动阶段</strong><span>获得 3 个行动点，可移动探险者或木筏。每次相邻移动消耗 1 点。</span></div></li>
                 <li><b>2</b><div><strong>水位上涨</strong><span>翻开一个当前最低地势：先海滩，再森林，最后山地，并立即结算背面效果。</span></div></li>
-                <li><b>3</b><div><strong>生物阶段</strong><span>掷生物骰，由当前玩家选择对应生物并逐格移动，也可以主动跳过。</span></div></li>
+                <li><b>3</b><div><strong>生物阶段</strong><span>掷生物骰，由当前玩家选择对应生物与本次终点，也可以主动跳过。</span></div></li>
                 <li><b>4</b><div><strong>下一位玩家</strong><span>所有攻击、推离与能力响应结算完成后，回合才会交给下一位玩家。</span></div></li>
               </ol>
               <div className="rule-callout"><Dices size={20} /><span>开局先轮流放置全部探险者，再放置木筏。整个放置阶段都能看到自己每名探险者的宝藏价值，正式行动开始后隐藏。</span></div>
@@ -138,7 +138,7 @@ export function RuleBook({ open, onClose }: { open: boolean; onClose: () => void
                 <article><strong>潜水</strong><p>把任意一只海洋生物移动到一个没有生物的水域。</p></article>
                 <article><strong>生物骰</strong><p>在行动阶段额外掷一次生物骰，完成生物移动后继续原行动阶段。</p></article>
                 <article><strong>驱逐剂</strong><p>仅在鲨鱼或巨兽攻击时使用，移除攻击者并取消本次攻击；不能驱逐海蛇。</p></article>
-                <article><strong>火山与漩涡</strong><p>火山累计至 3 座会结束游戏；漩涡会吞噬所在格的单位。</p></article>
+                <article><strong>火山与漩涡</strong><p>火山累计至 3 座会结束游戏；漩涡会吞噬中心格及周围一格内的探险者、木筏和生物。</p></article>
               </div>
             </div>
           )}

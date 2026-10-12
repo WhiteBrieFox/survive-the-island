@@ -26,6 +26,7 @@ import {
   respondRepellent,
   rollCreatureDie,
   runAITurn,
+  setMapMarker,
   sinkChosenTile,
   startGame,
   useAbility,
@@ -81,6 +82,7 @@ const normalizeRoom = (room: GameRoom): GameRoom => ({
   displacementMode: room.displacementMode ?? "choose",
   interactionContinuation: room.interactionContinuation ?? "none",
   postDisplacementContinuation: room.postDisplacementContinuation ?? "none",
+  markers: (room.markers ?? []).filter((marker) => marker.expiresAt > Date.now()),
   reconnectTokens: room.reconnectTokens ?? {},
   spectatorTokens: room.spectatorTokens ?? {}
 });
@@ -126,7 +128,12 @@ function sessionFor(room: GameRoom, socketId: string): SessionView {
 }
 
 function persistRooms() {
-  const serializable = [...rooms.values()].map(({ aiTimer: _aiTimer, creatureSkipTimer: _skipTimer, ...room }) => room);
+  const serializable = [...rooms.values()].map(({
+    aiTimer: _aiTimer,
+    creatureSkipTimer: _skipTimer,
+    markerTimer: _markerTimer,
+    ...room
+  }) => room);
   writeFileSync(snapshotPath, JSON.stringify(serializable, null, 2));
 }
 
@@ -141,7 +148,26 @@ function broadcast(room: GameRoom) {
   }
   persistRooms();
   scheduleCreatureSkip(room);
+  scheduleMarkerExpiry(room);
   scheduleAI(room);
+}
+
+function scheduleMarkerExpiry(room: GameRoom) {
+  if (room.markerTimer) clearTimeout(room.markerTimer);
+  room.markerTimer = undefined;
+  const nextExpiry = Math.min(...room.markers.map((marker) => marker.expiresAt));
+  if (!Number.isFinite(nextExpiry)) return;
+  room.markerTimer = setTimeout(() => {
+    room.markerTimer = undefined;
+    const remaining = room.markers.filter((marker) => marker.expiresAt > Date.now());
+    if (remaining.length === room.markers.length) {
+      scheduleMarkerExpiry(room);
+      return;
+    }
+    room.markers = remaining;
+    bump(room);
+    broadcast(room);
+  }, Math.max(0, nextExpiry - Date.now()) + 20);
 }
 
 function scheduleCreatureSkip(room: GameRoom) {
@@ -417,6 +443,16 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("setMapMarker", (locationId, ack) => {
+    safeAck(ack, () => {
+      const room = roomForSocket(socket.id);
+      if (!room) throw new Error("你不在房间中");
+      setMapMarker(room, identityForSocket(socket.id), locationId);
+      broadcast(room);
+      return undefined;
+    });
+  });
+
   socket.on("finishCreatureMove", (ack) => {
     safeAck(ack, () => {
       const room = roomForSocket(socket.id);
@@ -482,6 +518,7 @@ io.on("connection", (socket) => {
       const player = room.players.find((candidate) => candidate.id === playerId);
       if (player && room.phase === "lobby") {
         room.players = room.players.filter((candidate) => candidate.id !== playerId);
+        room.markers = room.markers.filter((marker) => marker.playerId !== playerId);
         delete room.reconnectTokens[player.id];
         if (room.hostId === player.id) {
           const nextHost = room.players.find((candidate) => !candidate.isAI);

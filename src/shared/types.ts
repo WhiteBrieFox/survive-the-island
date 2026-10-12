@@ -82,6 +82,12 @@ export interface CreatureView {
   locationId: string;
 }
 
+export interface MapMarkerView {
+  playerId: string;
+  locationId: string;
+  expiresAt: number;
+}
+
 export interface PendingChoiceView {
   type: "move-creature" | "repellent" | "displace" | "board-raft";
   creatureType?: CreatureType;
@@ -121,6 +127,7 @@ export interface PublicRoomState {
   explorers: ExplorerView[];
   rafts: RaftView[];
   creatures: CreatureView[];
+  markers: MapMarkerView[];
   currentPlayerId: string | null;
   turnPhase: TurnPhase;
   creatureRoll: CreatureRoll | null;
@@ -186,6 +193,7 @@ export interface ClientToServerEvents {
     input: { creatureId: string; targetId: string; revision: number },
     ack: (result: Ack) => void
   ) => void;
+  setMapMarker: (locationId: string | null, ack: (result: Ack) => void) => void;
   finishCreatureMove: (ack: (result: Ack) => void) => void;
   respondRepellent: (use: boolean, ack: (result: Ack) => void) => void;
   resolveDisplacement: (targetId: string, ack: (result: Ack) => void) => void;

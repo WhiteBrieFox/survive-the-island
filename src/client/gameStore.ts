@@ -9,6 +9,7 @@ interface GameStore {
   selectedRaftId: string | null;
   selectedCreatureId: string | null;
   activeAbility: AbilityType | null;
+  markerHotkeyPressed: boolean;
   notice: string | null;
   setSession: (clientId: string, role: Role, room: PublicRoomState) => void;
   setRoom: (room: PublicRoomState) => void;
@@ -16,6 +17,7 @@ interface GameStore {
   selectRaft: (id: string | null) => void;
   selectCreature: (id: string | null) => void;
   setActiveAbility: (ability: AbilityType | null) => void;
+  setMarkerHotkeyPressed: (pressed: boolean) => void;
   showNotice: (message: string | null) => void;
   reset: () => void;
 }
@@ -28,8 +30,9 @@ export const useGameStore = create<GameStore>((set) => ({
   selectedRaftId: null,
   selectedCreatureId: null,
   activeAbility: null,
+  markerHotkeyPressed: false,
   notice: null,
-  setSession: (clientId, role, room) => set({ clientId, role, room, selectedExplorerId: null, selectedRaftId: null, selectedCreatureId: null, activeAbility: null }),
+  setSession: (clientId, role, room) => set({ clientId, role, room, selectedExplorerId: null, selectedRaftId: null, selectedCreatureId: null, activeAbility: null, markerHotkeyPressed: false }),
   setRoom: (room) =>
     set((state) => ({
       room,
@@ -44,6 +47,7 @@ export const useGameStore = create<GameStore>((set) => ({
   selectRaft: (selectedRaftId) => set({ selectedRaftId, selectedExplorerId: null, selectedCreatureId: null }),
   selectCreature: (selectedCreatureId) => set({ selectedCreatureId, selectedExplorerId: null, selectedRaftId: null }),
   setActiveAbility: (activeAbility) => set({ activeAbility }),
+  setMarkerHotkeyPressed: (markerHotkeyPressed) => set({ markerHotkeyPressed }),
   showNotice: (notice) => set({ notice }),
-  reset: () => set({ clientId: null, role: null, room: null, selectedExplorerId: null, selectedRaftId: null, selectedCreatureId: null, activeAbility: null, notice: null })
+  reset: () => set({ clientId: null, role: null, room: null, selectedExplorerId: null, selectedRaftId: null, selectedCreatureId: null, activeAbility: null, markerHotkeyPressed: false, notice: null })
 }));

@@ -18,6 +18,7 @@ export function App() {
   const setRoom = useGameStore((state) => state.setRoom);
   const setSession = useGameStore((state) => state.setSession);
   const showNotice = useGameStore((state) => state.showNotice);
+  const setMarkerHotkeyPressed = useGameStore((state) => state.setMarkerHotkeyPressed);
   const [name, setName] = useState(() => localStorage.getItem("island-name") ?? "");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -74,6 +75,35 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [notice, showNotice]);
 
+  useEffect(() => {
+    if (role !== "player") {
+      setMarkerHotkeyPressed(false);
+      return;
+    }
+    const isTypingTarget = (target: EventTarget | null) =>
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "KeyG" || event.repeat || isTypingTarget(event.target)) return;
+      event.preventDefault();
+      setMarkerHotkeyPressed(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== "KeyG") return;
+      setMarkerHotkeyPressed(false);
+    };
+    const onBlur = () => setMarkerHotkeyPressed(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [role, setMarkerHotkeyPressed]);
+
   const handleSession = (result: Ack<SessionView>) => {
     if (!result.ok || !result.data) {
       setBusy(false);
@@ -85,7 +115,6 @@ export function App() {
     setSession(result.data.clientId, result.data.role, result.data.room);
     setLiveRoom(result.data.room);
     setBusy(false);
-    window.location.reload();
   };
 
   const createRoom = () => {

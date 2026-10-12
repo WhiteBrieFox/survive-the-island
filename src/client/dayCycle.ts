@@ -19,6 +19,7 @@ export type DayStage = {
   hemisphereSky: string;
   hemisphereGround: string;
   hemisphereIntensity: number;
+  exposure: number;
   sparkle: string;
 };
 
@@ -40,6 +41,7 @@ export const DAY_STAGES: Record<DayStageId, DayStage> = {
     hemisphereSky: "#ffd9a1",
     hemisphereGround: "#315d58",
     hemisphereIntensity: 0.72,
+    exposure: 0.96,
     sparkle: "#ffe1a5"
   },
   noon: {
@@ -54,11 +56,12 @@ export const DAY_STAGES: Record<DayStageId, DayStage> = {
     oceanDepth: "#07546b",
     sun: [2, 32, -1],
     sunColor: "#fffdf0",
-    sunIntensity: 3.75,
-    ambient: 1.28,
-    hemisphereSky: "#e9ffff",
+    sunIntensity: 2.65,
+    ambient: 0.82,
+    hemisphereSky: "#dff7f5",
     hemisphereGround: "#1b635b",
-    hemisphereIntensity: 1.35,
+    hemisphereIntensity: 0.88,
+    exposure: 0.82,
     sparkle: "#d8ffff"
   },
   dusk: {
@@ -78,6 +81,7 @@ export const DAY_STAGES: Record<DayStageId, DayStage> = {
     hemisphereSky: "#f0a07b",
     hemisphereGround: "#282f46",
     hemisphereIntensity: 0.6,
+    exposure: 0.92,
     sparkle: "#ffd0a2"
   }
 };

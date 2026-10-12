@@ -14,7 +14,7 @@ export function soundForGameEvent(event: GameEventView, room: PublicRoomState): 
       return "raft-place";
     case "turns-started":
     case "turn-started":
-      return "turn-start";
+      return null;
     case "explorer-moved":
       return "explorer-step";
     case "swimmer-moved":

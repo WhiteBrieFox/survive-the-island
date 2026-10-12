@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, Bot, ChevronRight, Clock3, Dices, Eye, Fish, Flag, Flame, Footprints, Hand,
-  LogOut, Navigation, ScrollText, Shield, Users, Waves, X
+  LifeBuoy, LogOut, Navigation, ScrollText, Shield, UserRoundX, Users, Waves, X
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import type { AbilityType, PublicRoomState, Role } from "../../shared/types";
+import type { AbilityType, PlayerColor, PublicRoomState, Role } from "../../shared/types";
 import { dayStageFor } from "../dayCycle";
 import { useGameStore } from "../gameStore";
 import { socket } from "../socket";
 import { ResultPanel } from "./ResultPanel";
+
+const playerColorNames: Record<PlayerColor, string> = {
+  coral: "珊瑚红",
+  teal: "海松绿",
+  gold: "金黄",
+  violet: "紫罗兰",
+  sky: "天蓝"
+};
 
 export function GameHud({
   room,
@@ -127,6 +135,14 @@ export function GameHud({
     return groups;
   }, []) ?? [];
   const nextExplorer = room.explorers.find((explorer) => explorer.ownerId === clientId && !explorer.locationId && !explorer.lost && !explorer.rescued);
+  const expeditionStats = {
+    total: room.explorers.length,
+    rescued: room.explorers.filter((explorer) => explorer.rescued).length,
+    lost: room.explorers.filter((explorer) => explorer.lost).length,
+    awaitingRescue: room.explorers.filter((explorer) =>
+      !explorer.rescued && !explorer.lost
+    ).length
+  };
 
   const activateAbility = (ability: AbilityType) => {
     if (ability === "creature-die") {
@@ -176,7 +192,10 @@ export function GameHud({
           ) : (
             <>
               {current?.isAI ? <Bot size={17} /> : <Footprints size={17} />}
-              <span>{myTurn ? phaseLabel : `${current?.name ?? "等待"} · ${phaseLabel}`}</span>
+              <span className="turn-readout-copy">
+                {myTurn ? "你的回合" : current?.name ?? "等待"}
+                <small>· {phaseLabel}</small>
+              </span>
               {room.turnPhase === "action" && <strong>{room.actionsLeft}</strong>}
             </>
           )}
@@ -197,16 +216,37 @@ export function GameHud({
 
       <aside className="score-panel">
         <div className="score-heading"><Users size={17} />远征队</div>
-        {room.players.map((player) => (
-          <div className={`score-row ${player.id === room.currentPlayerId ? "current" : ""}`} key={player.id}>
-            <span className={`player-swatch swatch-${player.color}`} />
-            <div>
-              <strong>{player.name}</strong>
-              <span>{player.rescued} 获救 · {player.lost} 失踪</span>
+        <div className="expedition-summary" aria-label="全队探险者状态">
+          <span><Users size={13} /><b>{expeditionStats.total}</b><small>总人数</small></span>
+          <span><LifeBuoy size={13} /><b>{expeditionStats.rescued}</b><small>获救</small></span>
+          <span><UserRoundX size={13} /><b>{expeditionStats.lost}</b><small>失踪</small></span>
+          <span><Hand size={13} /><b>{expeditionStats.awaitingRescue}</b><small>待救</small></span>
+        </div>
+        {room.players.map((player) => {
+          const explorers = room.explorers.filter((explorer) => explorer.ownerId === player.id);
+          const awaitingRescue = explorers.filter((explorer) =>
+            !explorer.rescued && !explorer.lost
+          ).length;
+          return (
+            <div className={`score-row ${player.id === room.currentPlayerId ? "current" : ""}`} key={player.id}>
+              <span
+                className="player-swatches"
+                aria-label={`控制颜色：${player.colors.map((color) => playerColorNames[color]).join("、")}`}
+              >
+                {player.colors.map((color) => (
+                  <span className={`player-swatch swatch-${color}`} key={color} />
+                ))}
+              </span>
+              <div>
+                <strong>{player.name}</strong>
+                <span title={`总人数 ${explorers.length}，获救 ${player.rescued}，失踪 ${player.lost}，待救 ${awaitingRescue}`}>
+                  总人数 {explorers.length} · 获救 {player.rescued} · 失踪 {player.lost} · 待救 {awaitingRescue}
+                </span>
+              </div>
+              <b>{player.score}</b>
             </div>
-            <b>{player.score}</b>
-          </div>
-        ))}
+          );
+        })}
         {room.spectators.length > 0 && (
           <div className="watching"><Eye size={14} />{room.spectators.length} 人观战</div>
         )}
@@ -297,8 +337,15 @@ export function GameHud({
 
       {myTurn && room.phase === "playing" && room.turnPhase === "setup-explorer" && (
         <div className="turn-actions setup-prompt">
-          <span>选择高亮地形放置探险者</span>
-          <strong>宝藏价值 {nextExplorer?.value ?? "?"}</strong>
+          <span>
+            选择高亮地形放置探险者
+            {me && me.colors.length > 1 && <small>双人局由你控制两种颜色</small>}
+          </span>
+          <div className="setup-current-explorer">
+            {nextExplorer && <span className={`player-swatch swatch-${nextExplorer.color}`} />}
+            <strong>{nextExplorer ? playerColorNames[nextExplorer.color] : "探险者"} · 宝藏价值 {nextExplorer?.value ?? "?"}</strong>
+            <small>剩余 {me?.explorersToPlace ?? 0} 名</small>
+          </div>
         </div>
       )}
 
@@ -337,7 +384,7 @@ export function GameHud({
             <>
               <span>
                 {hasRolledCreature
-                  ? `选择一只${rolledCreatureName}，逐格移动（剩余 ${room.pendingChoice.stepsRemaining ?? 0}）`
+                  ? `选择一只${rolledCreatureName}与终点（最多 ${room.pendingChoice.stepsRemaining ?? 0} 格）`
                   : `场上没有${rolledCreatureName}，可以跳过本次生物移动`}
               </span>
               <button
@@ -455,9 +502,6 @@ export function GameHud({
         />
       )}
 
-      {me && role === "player" && (
-        <div className="private-score">你的宝藏：{me.score}</div>
-      )}
     </>
   );
 }

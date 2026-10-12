@@ -77,7 +77,9 @@ const layers: Record<SoundId, SoundLayer[]> = {
     { src: `${kenney}impact-light.ogg`, volume: 0.46, playbackRate: 1.28 }
   ],
   "turn-start": [
-    { src: `${mixkit}ui-confirm.mp3`, volume: 0.48, playbackRate: 1.04, stopAfter: 0.9 }
+    { src: `${mixkit}ui-confirm.mp3`, volume: 0.7, playbackRate: 1.08, stopAfter: 0.95 },
+    { src: `${mixkit}ui-positive.mp3`, volume: 0.48, delay: 0.22, playbackRate: 1.08, stopAfter: 1.05 },
+    { src: `${kenney}impact-bell.ogg`, volume: 0.28, delay: 0.52, playbackRate: 1.18, stopAfter: 0.8 }
   ],
   "rising-prompt": [
     { src: `${mixkit}whoosh.mp3`, volume: 0.34, playbackRate: 0.82, stopAfter: 0.55 },
@@ -211,7 +213,7 @@ export const soundDefinitions: SoundDefinition[] = [
   { id: "explorer-place", label: "放置探险者", category: "setup", description: "软质棋子落下与草地接触的 Foley。", duration: "0.3s", source: "Kenney CC0" },
   { id: "raft-place", label: "放置木筏", category: "setup", description: "木板落点与海水飞溅的双层组合。", duration: "0.7s", source: "Mixkit + Kenney CC0" },
   { id: "ui-select", label: "选择棋子", category: "ui", description: "极短实体碰触音，减少电子按钮感。", duration: "0.15s", source: "Kenney CC0" },
-  { id: "turn-start", label: "回合开始", category: "ui", description: "清晰但克制的控制权提示。", duration: "0.9s", source: "Mixkit" },
+  { id: "turn-start", label: "轮到自己", category: "ui", description: "仅当前玩家听到的明亮双段提示，并以短促铃音收尾。", duration: "1.3s", source: "Mixkit + Kenney CC0" },
   { id: "rising-prompt", label: "进入沉岛阶段", category: "ui", description: "下降掠过声与岩石触发音。", duration: "0.6s", source: "Mixkit + Kenney CC0" },
   { id: "creature-prompt", label: "进入生物阶段", category: "ui", description: "四段实体碰撞模拟木骰滚动落定。", duration: "0.5s", source: "Kenney CC0" },
   { id: "explorer-step", label: "陆地移动", category: "movement", description: "两次独立草地脚步，保留自然差异。", duration: "0.35s", source: "Kenney CC0" },

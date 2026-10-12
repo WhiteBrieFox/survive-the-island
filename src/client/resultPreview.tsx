@@ -81,6 +81,7 @@ const room: PublicRoomState = {
   ),
   rafts: [],
   creatures: [],
+      markers: [],
   currentPlayerId: null,
   turnPhase: "creature",
   creatureRoll: null,

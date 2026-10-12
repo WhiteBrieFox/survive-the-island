@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { areAdjacent, hexDistance } from "../shared/hex";
 import {
   addPlayer, createRoom, endTurn, finishCreatureMovement, moveCreature, moveExplorer, moveRaft, placeExplorer, placeRaft,
-  publicState, resolveBoarding, resolveDisplacement, respondRepellent, rollCreatureDie, runAITurn, sinkChosenTile, startGame,
+  publicState, resolveBoarding, resolveDisplacement, respondRepellent, rollCreatureDie, runAITurn, setMapMarker, sinkChosenTile, startGame,
   useAbility
 } from "./game";
 
@@ -34,6 +34,7 @@ function startedRoom(withAI = false) {
   if (!withAI) room.players[1].ready = true;
   startGame(room);
   completeSetup(room);
+  room.currentPlayerId = "host";
   return room;
 }
 
@@ -80,6 +81,23 @@ function finishCreaturePhase(room: Room, playerId: string) {
 }
 
 describe("complete game core", () => {
+  it("randomizes the player order at game start", () => {
+    const room = createRoom("ORDER1", "host", "船长");
+    room.players[0].ready = true;
+    addPlayer(room, "guest", "水手");
+    room.players[1].ready = true;
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      startGame(room);
+    } finally {
+      random.mockRestore();
+    }
+
+    expect(room.players.map((player) => player.id)).toEqual(["guest", "host"]);
+    expect(room.currentPlayerId).toBe("guest");
+    expect(room.events.at(-1)?.payload?.turnOrder).toEqual(["guest", "host"]);
+  });
+
   it("creates exact component distributions", () => {
     const room = startedRoom();
     const island = room.tiles.filter((tile) => !tile.isRescue);
@@ -93,6 +111,17 @@ describe("complete game core", () => {
     expect(room.explorers).toHaveLength(40);
     expect(room.rafts).toHaveLength(8);
     expect(room.creatures.filter((creature) => creature.type === "sea-serpent")).toHaveLength(5);
+    expect(island.some((tile) => tile.q === 0 && tile.r === 0)).toBe(false);
+    const islandCoords = new Set(island.map((tile) => `${tile.q},${tile.r}`));
+    for (const tile of island) {
+      expect(islandCoords.has(`${-tile.q - tile.r},${tile.r}`)).toBe(true);
+      expect(islandCoords.has(`${tile.q + tile.r},${-tile.r}`)).toBe(true);
+    }
+    const center = room.waterSpaces.find((space) => space.q === 0 && space.r === 0);
+    expect(center).toBeDefined();
+    expect(room.creatures.some((creature) =>
+      creature.type === "sea-serpent" && creature.locationId === center?.id
+    )).toBe(true);
   });
 
   it("places rescue islands across open water with a guarding sea serpent", () => {
@@ -100,12 +129,43 @@ describe("complete game core", () => {
     const island = room.tiles.filter((tile) => !tile.isRescue);
     const rescues = room.tiles.filter((tile) => tile.isRescue);
     for (const rescue of rescues) {
-      expect(Math.min(...island.map((tile) => hexDistance(tile, rescue)))).toBeGreaterThan(1);
+      expect(hexDistance({ q: 0, r: 0 }, rescue)).toBe(8);
+      expect(Math.min(...island.map((tile) => hexDistance(tile, rescue)))).toBeGreaterThanOrEqual(4);
       expect(room.creatures.some((creature) => {
         const space = room.waterSpaces.find((water) => water.id === creature.locationId);
         return creature.type === "sea-serpent" && space && areAdjacent(space, rescue);
       })).toBe(true);
     }
+  });
+
+  it("rejects an initial raft on a sea serpent water space", () => {
+    const room = createRoom("RAFT01", "host", "船长");
+    room.players[0].ready = true;
+    addPlayer(room, "guest", "水手");
+    room.players[1].ready = true;
+    startGame(room);
+    while (room.turnPhase === "setup-explorer") {
+      const playerId = room.currentPlayerId!;
+      const tile = room.tiles.find((candidate) =>
+        candidate.active &&
+        !candidate.isRescue &&
+        !room.explorers.some((explorer) => explorer.locationId === candidate.id)
+      )!;
+      placeExplorer(room, playerId, tile.id);
+    }
+    const serpent = room.creatures.find((creature) => {
+      if (creature.type !== "sea-serpent") return false;
+      const location = room.waterSpaces.find((space) => space.id === creature.locationId);
+      return location && room.tiles.some((tile) =>
+        tile.active && !tile.isRescue && areAdjacent(location, tile)
+      );
+    })!;
+
+    const playerId = room.currentPlayerId!;
+
+    expect(() => placeRaft(room, playerId, serpent.locationId)).toThrow(/海蛇所在水域/);
+    expect(room.rafts.some((raft) => raft.locationId === serpent.locationId)).toBe(false);
+    expect(room.currentPlayerId).toBe(playerId);
   });
 
   it("requires a raft to enter a rescue island", () => {
@@ -127,8 +187,36 @@ describe("complete game core", () => {
     explorer.swimming = false;
     moveExplorer(room, "host", explorer.id, rescue.id);
     expect(explorer.rescued).toBe(true);
-    expect(explorer.locationId).toBe(rescue.id);
+    expect(explorer.locationId).toBeNull();
+    expect(explorer.tileId).toBeNull();
     expect(explorer.raftId).toBeNull();
+  });
+
+  it("removes rescued explorers so a rescue island never fills up", () => {
+    const room = startedRoom();
+    const rescue = room.tiles.find((tile) => tile.isRescue)!;
+    const source = room.waterSpaces.find((space) => areAdjacent(space, rescue))!;
+    const raft = room.rafts[0];
+    const explorers = room.explorers
+      .filter((explorer) => explorer.ownerId === "host")
+      .slice(0, 6);
+    raft.locationId = source.id;
+    room.actionsLeft = explorers.length;
+
+    for (const explorer of explorers) {
+      explorer.locationId = explorer.tileId = source.id;
+      explorer.raftId = raft.id;
+      explorer.swimming = false;
+      moveExplorer(room, "host", explorer.id, rescue.id);
+    }
+
+    expect(explorers.every((explorer) =>
+      explorer.rescued &&
+      explorer.locationId === null &&
+      explorer.tileId === null &&
+      explorer.raftId === null
+    )).toBe(true);
+    expect(room.players.find((player) => player.id === "host")?.rescued).toBe(explorers.length);
   });
 
   it("shows all owned treasure values throughout placement and hides them when turns begin", () => {
@@ -218,15 +306,51 @@ describe("complete game core", () => {
     expect(revealed?.revealedEffect).toBe(hiddenHazard.effect);
   });
 
+  it("lets a whirlpool consume its center and every adjacent space", () => {
+    const room = startedRoom();
+    const center = room.tiles.find((tile) =>
+      tile.active &&
+      !tile.isRescue &&
+      tile.terrain === "beach" &&
+      room.tiles.some((neighbor) => neighbor.active && !neighbor.isRescue && areAdjacent(tile, neighbor))
+    )!;
+    const neighbor = room.tiles.find((tile) =>
+      tile.active && !tile.isRescue && areAdjacent(center, tile)
+    )!;
+    const centerExplorer = room.explorers.find((explorer) => explorer.locationId === center.id)!;
+    const neighborExplorer = room.explorers.find((explorer) => explorer.locationId === neighbor.id)!;
+    const raft = room.rafts[0];
+    const creature = room.creatures[0];
+    center.effect = "whirlpool";
+    raft.locationId = neighbor.id;
+    creature.locationId = neighbor.id;
+
+    endTurn(room);
+    sinkChosenTile(room, "host", center.id);
+
+    expect(centerExplorer.lost).toBe(true);
+    expect(neighborExplorer.lost).toBe(true);
+    expect(room.rafts.some((candidate) => candidate.id === raft.id)).toBe(false);
+    expect(room.creatures.some((candidate) => candidate.id === creature.id)).toBe(false);
+  });
+
   it("enforces one swimming move per explorer each turn", () => {
     const room = startedRoom();
     const explorer = room.explorers.find((item) => {
       const source = room.tiles.find((tile) => tile.id === item.locationId);
       return item.ownerId === "host" && source &&
-        room.waterSpaces.some((space) => areAdjacent(source, space) && !room.rafts.some((raft) => raft.locationId === space.id));
+        room.waterSpaces.some((space) =>
+          areAdjacent(source, space) &&
+          !room.rafts.some((raft) => raft.locationId === space.id) &&
+          room.waterSpaces.some((next) => areAdjacent(space, next))
+        );
     })!;
     const source = room.tiles.find((tile) => tile.id === explorer.locationId)!;
-    const water = room.waterSpaces.find((space) => areAdjacent(source, space) && !room.rafts.some((raft) => raft.locationId === space.id))!;
+    const water = room.waterSpaces.find((space) =>
+      areAdjacent(source, space) &&
+      !room.rafts.some((raft) => raft.locationId === space.id) &&
+      room.waterSpaces.some((next) => areAdjacent(space, next))
+    )!;
     moveExplorer(room, "host", explorer.id, water.id);
     const nextWater = room.waterSpaces.find((space) => areAdjacent(water, space))!;
     expect(() => moveExplorer(room, "host", explorer.id, nextWater.id)).toThrow(/已经游过一次/);
@@ -309,6 +433,54 @@ describe("complete game core", () => {
     expect(swimmer.raftId).toBe(raft.id);
     expect(swimmer.locationId).toBe(route.target.id);
     expect(swimmer.swimming).toBe(false);
+  });
+
+  it("does not let paddles pass through a sea serpent", () => {
+    const room = startedRoom();
+    const raft = room.rafts[0];
+    const allSpaces = [...room.tiles, ...room.waterSpaces];
+    const source = allSpaces.find((space) => space.id === raft.locationId)!;
+    const route = room.waterSpaces.flatMap((target) => {
+      if (
+        hexDistance(source, target) !== 2 ||
+        room.rafts.some((candidate) => candidate.locationId === target.id)
+      ) return [];
+      const middle = room.waterSpaces.find((space) =>
+        areAdjacent(source, space) &&
+        areAdjacent(space, target) &&
+        !room.rafts.some((candidate) => candidate.locationId === space.id)
+      );
+      return middle ? [{ middle, target }] : [];
+    })[0];
+    expect(route).toBeDefined();
+    room.creatures.push({ id: "blocking-serpent", type: "sea-serpent", locationId: route.middle.id });
+    room.players.find((player) => player.id === "host")!.abilities.push("paddles");
+
+    expect(() => useAbility(room, "host", "paddles", raft.id, route.target.id)).toThrow(/没有可通过的航线/);
+    expect(raft.locationId).toBe(source.id);
+  });
+
+  it("does not let a dolphin swimmer pass through a creature", () => {
+    const room = startedRoom();
+    const allSpaces = [...room.tiles, ...room.waterSpaces];
+    const route = room.waterSpaces.flatMap((source) => {
+      const target = room.waterSpaces.find((candidate) => hexDistance(source, candidate) === 2);
+      if (!target) return [];
+      const middle = room.waterSpaces.find((candidate) =>
+        areAdjacent(source, candidate) && areAdjacent(candidate, target)
+      );
+      return middle ? [{ source, middle, target }] : [];
+    })[0];
+    expect(route).toBeDefined();
+    const swimmer = room.explorers.find((explorer) => explorer.ownerId === "host")!;
+    swimmer.locationId = swimmer.tileId = route.source.id;
+    swimmer.raftId = null;
+    swimmer.swimming = true;
+    room.creatures.push({ id: "blocking-shark", type: "shark", locationId: route.middle.id });
+    room.players.find((player) => player.id === "host")!.abilities.push("dolphin");
+
+    expect(() => useAbility(room, "host", "dolphin", swimmer.id, route.target.id)).toThrow(/路径被阻挡/);
+    expect(swimmer.locationId).toBe(route.source.id);
   });
 
   it("keeps all three turn stages separate", () => {
@@ -548,6 +720,7 @@ describe("complete game core", () => {
         placeRaft(room, "host", water.id);
       }
     }
+    while (room.currentPlayerId === "ai-1") runAITurn(room);
     endTurn(room);
     sinkChosenTile(room, "host", room.tiles.find((tile) => tile.active && !tile.isRescue && tile.terrain === "beach")!.id);
     settlePendingChoices(room, "host");
@@ -577,6 +750,7 @@ describe("complete game core", () => {
     expect(hostView.explorers.filter((explorer) => explorer.ownerId === "host" && explorer.value !== undefined)).toHaveLength(20);
     expect(guestView.explorers.filter((explorer) => explorer.ownerId === "host").every((explorer) => explorer.value === undefined)).toBe(true);
     expect(hostView.events.every((event) => event.payload === undefined)).toBe(true);
+    room.currentPlayerId = "host";
     placeExplorer(room, "host", room.tiles.find((tile) => !tile.isRescue)!.id);
     expect(publicState(room, "guest").log.at(-1)).not.toMatch(/\d/);
   });
@@ -616,12 +790,21 @@ describe("complete game core", () => {
     }
   });
 
-  it("moves sharks one space at a time and allows stopping after the first step", () => {
+  it("moves sharks directly to a destination two legal spaces away", () => {
     const room = startedRoom();
     const from = room.waterSpaces.find((space) =>
-      room.waterSpaces.some((target) => areAdjacent(space, target))
+      room.waterSpaces.some((middle) =>
+        areAdjacent(space, middle) &&
+        room.waterSpaces.some((target) => target.id !== space.id && areAdjacent(middle, target))
+      )
     )!;
-    const target = room.waterSpaces.find((space) => areAdjacent(from, space))!;
+    const middle = room.waterSpaces.find((space) =>
+      areAdjacent(from, space) &&
+      room.waterSpaces.some((target) => target.id !== from.id && areAdjacent(space, target))
+    )!;
+    const target = room.waterSpaces.find((space) =>
+      areAdjacent(middle, space) && hexDistance(from, space) === 2
+    )!;
     room.creatures.push({ id: "test-shark", type: "shark", locationId: from.id });
     room.turnPhase = "creature-move";
     room.creatureRoll = "shark";
@@ -630,9 +813,94 @@ describe("complete game core", () => {
     room.resumePhase = "creature";
     room.pendingChoice = { type: "move-creature", creatureType: "shark", stepsRemaining: 2, canFinish: false };
     moveCreature(room, "host", "test-shark", target.id);
-    expect(room.pendingChoice).toMatchObject({ type: "move-creature", creatureId: "test-shark", stepsRemaining: 1, canFinish: true });
-    finishCreatureMovement(room, "host");
+    expect(room.creatures.find((creature) => creature.id === "test-shark")?.locationId).toBe(target.id);
+    expect([...room.events].reverse().find((event) => event.type === "creature-moved")?.payload?.route).toHaveLength(2);
     expect(room.currentPlayerId).toBe("guest");
+  });
+
+  it("does not allow a creature target beyond the first interaction", () => {
+    const room = startedRoom();
+    const from = room.waterSpaces.find((space) =>
+      room.waterSpaces.some((middle) =>
+        areAdjacent(space, middle) &&
+        room.waterSpaces.some((target) => target.id !== space.id && areAdjacent(middle, target))
+      )
+    )!;
+    const middle = room.waterSpaces.find((space) =>
+      areAdjacent(from, space) &&
+      room.waterSpaces.some((target) => target.id !== from.id && areAdjacent(space, target))
+    )!;
+    const target = room.waterSpaces.find((space) => space.id !== from.id && areAdjacent(middle, space))!;
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "guest")!;
+    victim.locationId = victim.tileId = middle.id;
+    victim.raftId = null;
+    victim.swimming = true;
+    room.creatures.push({ id: "path-shark", type: "shark", locationId: from.id });
+    room.turnPhase = "creature-move";
+    room.creatureRoll = "shark";
+    room.creatureMovesRemaining = 2;
+    room.creatureMoved = false;
+    room.resumePhase = "creature";
+    room.pendingChoice = { type: "move-creature", creatureType: "shark", stepsRemaining: 2, canFinish: false };
+
+    expect(() => moveCreature(room, "host", "path-shark", target.id)).toThrow(/目标不在本次可移动范围内/);
+    expect(room.creatures.find((creature) => creature.id === "path-shark")?.locationId).toBe(from.id);
+    expect(victim.lost).toBe(false);
+
+    moveCreature(room, "host", "path-shark", middle.id);
+    expect(victim.lost).toBe(true);
+  });
+
+  it("uses an open alternate route when another route has a swimmer", () => {
+    const room = startedRoom();
+    const route = room.waterSpaces.flatMap((from) => {
+      const target = room.waterSpaces.find((candidate) => hexDistance(from, candidate) === 2);
+      if (!target) return [];
+      const middles = room.waterSpaces.filter((candidate) =>
+        areAdjacent(from, candidate) && areAdjacent(candidate, target)
+      );
+      return middles.length >= 2 ? [{ from, target, blocked: middles[0], open: middles[1] }] : [];
+    })[0];
+    expect(route).toBeDefined();
+    const victim = room.explorers.find((explorer) => explorer.ownerId === "guest")!;
+    victim.locationId = victim.tileId = route.blocked.id;
+    victim.raftId = null;
+    victim.swimming = true;
+    room.creatures.push({ id: "alternate-route-shark", type: "shark", locationId: route.from.id });
+    room.turnPhase = "creature-move";
+    room.creatureRoll = "shark";
+    room.creatureMovesRemaining = 2;
+    room.creatureMoved = false;
+    room.resumePhase = "creature";
+    room.pendingChoice = { type: "move-creature", creatureType: "shark", stepsRemaining: 2, canFinish: false };
+
+    moveCreature(room, "host", "alternate-route-shark", route.target.id);
+
+    expect(room.creatures.find((creature) => creature.id === "alternate-route-shark")?.locationId).toBe(route.target.id);
+    expect(victim.lost).toBe(false);
+    expect([...room.events].reverse().find((event) => event.type === "creature-moved")?.payload?.route).toEqual([
+      route.open.id,
+      route.target.id
+    ]);
+  });
+
+  it("shares one movable map marker per player and removes it on a repeated location", () => {
+    const room = startedRoom();
+    const first = room.tiles.find((tile) => tile.active && !tile.isRescue)!;
+    const second = room.waterSpaces[0];
+
+    setMapMarker(room, "host", first.id);
+    expect(publicState(room, "guest").markers).toEqual([
+      expect.objectContaining({ playerId: "host", locationId: first.id, expiresAt: expect.any(Number) })
+    ]);
+
+    setMapMarker(room, "host", second.id);
+    expect(room.markers).toEqual([
+      expect.objectContaining({ playerId: "host", locationId: second.id, expiresAt: expect.any(Number) })
+    ]);
+
+    setMapMarker(room, "host", second.id);
+    expect(room.markers).toEqual([]);
   });
 
   it("lets a shark enter a sunken tile and eat its swimmer", () => {

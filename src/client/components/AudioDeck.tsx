@@ -3,6 +3,7 @@ import { Music, Volume2, VolumeX } from "lucide-react";
 import type { PublicRoomState } from "../../shared/types";
 import { dayStageFor } from "../dayCycle";
 import { soundForGameEvent } from "../gameSound";
+import { useGameStore } from "../gameStore";
 import { playSound, stopSounds } from "../sampleSoundDesign";
 
 type Mixer = {
@@ -34,6 +35,8 @@ function bgmFor(room: PublicRoomState | null) {
 }
 
 export function AudioDeck({ room }: { room: PublicRoomState | null }) {
+  const clientId = useGameStore((state) => state.clientId);
+  const role = useGameStore((state) => state.role);
   const [mixer, setMixer] = useState(loadMixer);
   const [open, setOpen] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
@@ -44,6 +47,8 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
   const fadeFrame = useRef<number | null>(null);
   const bgmVolume = useRef(mixer.bgm);
   const previousEventId = useRef<number | null>(null);
+  const previousMyTurn = useRef(false);
+  const pendingTurnSound = useRef(false);
   const track = bgmFor(room);
 
   useEffect(() => {
@@ -183,6 +188,31 @@ export function AudioDeck({ room }: { room: PublicRoomState | null }) {
       });
     });
   }, [mixer.muted, mixer.sfx, room, unlocked]);
+
+  useEffect(() => {
+    if (!room) {
+      previousMyTurn.current = false;
+      pendingTurnSound.current = false;
+      return;
+    }
+    const isMyTurn = role === "player" &&
+      room.phase === "playing" &&
+      Boolean(clientId) &&
+      room.currentPlayerId === clientId;
+    const becameMyTurn = isMyTurn && !previousMyTurn.current;
+    previousMyTurn.current = isMyTurn;
+    if (!isMyTurn) {
+      pendingTurnSound.current = false;
+      return;
+    }
+    if (becameMyTurn) pendingTurnSound.current = true;
+    if (!pendingTurnSound.current || !unlocked || mixer.muted || mixer.sfx <= 0) return;
+    pendingTurnSound.current = false;
+    playSound("turn-start", Math.min(1, mixer.sfx * 1.18), {
+      channel: "game",
+      interrupt: false
+    });
+  }, [clientId, mixer.muted, mixer.sfx, role, room, unlocked]);
 
   useEffect(() => {
     if (mixer.muted || mixer.sfx <= 0) stopSounds("game");

@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ContactShadows, Edges, Float, Html, OrbitControls, Sparkles, useAnimations, useGLTF } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ContactShadows, Edges, Float, Html, OrbitControls, Sparkles, useAnimations, useGLTF, useTexture } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
-  AmbientLight, BufferGeometry, CanvasTexture, Color, DirectionalLight, Float32BufferAttribute, Group,
+  AmbientLight, Box3, BufferGeometry, CanvasTexture, Color, DirectionalLight, Float32BufferAttribute, Group,
   HemisphereLight, LineSegments, Mesh, MeshBasicMaterial, MeshPhysicalMaterial,
-  MeshStandardMaterial, SRGBColorSpace, Vector3, type Material, type Object3D
+  MeshStandardMaterial, Plane, Raycaster, SRGBColorSpace, Vector2, Vector3,
+  type Material, type Object3D, type Texture
 } from "three";
 import { useShallow } from "zustand/react/shallow";
 import type {
@@ -30,7 +31,13 @@ const BOARD_SCALE = 2;
 const terrainColor: Record<Terrain, string> = {
   beach: "#e8c878",
   forest: "#4f9a68",
-  mountain: "#7d7b82"
+  mountain: "#51453d"
+};
+
+const terrainSideColor: Record<Terrain, string> = {
+  beach: "#a97643",
+  forest: "#355e48",
+  mountain: "#38332f"
 };
 
 const landUnitSlots: Array<[number, number]> = [
@@ -53,15 +60,8 @@ const waterUnitSlots: Array<[number, number]> = [
   [0, 0.08]
 ];
 
-const rescueUnitSlots: Array<[number, number]> = [
-  [-0.48, 0.38],
-  [0, 0.54],
-  [0.48, 0.38],
-  [-0.32, -0.26],
-  [0.32, -0.26]
-];
-
 const EXPLORER_SPACE_CAPACITY = 5;
+const WHIRLPOOL_DURATION = 3.8;
 
 type UnitPlacement = {
   x: number;
@@ -125,34 +125,95 @@ function AnimatedMover({
 
 const modelPath = (name: string) => `/assets/models-preview/${name}.glb`;
 const heroModelPath = (name: HeroModelName) => `/assets/models-hero/${name}-hyper3d-pbr.glb`;
+const volcanoModelPath = modelPath("volcano-hyper3d");
+const whirlpoolModelPath = modelPath("whirlpool-hyper3d");
 
 type AssetModelProps = {
   name: string;
   color?: string;
   animate?: boolean;
+  castShadow?: boolean;
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: number | [number, number, number];
 };
 
-function prepareModel(source: Object3D, color?: string) {
+function prepareModel(
+  source: Object3D,
+  color?: string,
+  castShadow = true
+) {
   const clone = source.clone(true);
   clone.traverse((object) => {
     if (!(object instanceof Mesh)) return;
-    object.castShadow = true;
+    object.castShadow = castShadow;
     object.receiveShadow = true;
-    if (!color) return;
-    const recolor = (sourceMaterial: Material) => {
+    const prepareMaterial = (sourceMaterial: Material) => {
       const material = sourceMaterial.clone();
-      if (material.name === "PlayerColor" && "color" in material) {
+      if (color && material.name === "PlayerColor" && "color" in material) {
         (material.color as Color).set(color);
       }
       return material;
     };
     object.material = Array.isArray(object.material)
-      ? object.material.map(recolor)
-      : recolor(object.material);
+      ? object.material.map(prepareMaterial)
+      : prepareMaterial(object.material);
   });
+  return clone;
+}
+
+function prepareVolcanoModel(source: Object3D) {
+  const clone = source.clone(true);
+  clone.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+    const cloneMaterial = (sourceMaterial: Material) => sourceMaterial.clone();
+    object.material = Array.isArray(object.material)
+      ? object.material.map(cloneMaterial)
+      : cloneMaterial(object.material);
+  });
+  const bounds = new Box3().setFromObject(clone);
+  const center = bounds.getCenter(new Vector3());
+  clone.position.set(-center.x, -bounds.min.y, -center.z);
+  return clone;
+}
+
+function VolcanoModel({
+  rotation,
+  scale
+}: {
+  rotation: [number, number, number];
+  scale: number;
+}) {
+  const { scene } = useGLTF(volcanoModelPath, "/draco/");
+  const model = useMemo(() => prepareVolcanoModel(scene), [scene]);
+  return (
+    <group rotation={rotation} scale={scale}>
+      <primitive object={model} />
+    </group>
+  );
+}
+
+function prepareWhirlpoolModel(source: Object3D) {
+  const clone = source.clone(true);
+  clone.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const prepareMaterial = (sourceMaterial: Material) => {
+      const material = sourceMaterial.clone();
+      material.transparent = true;
+      return material;
+    };
+    object.material = Array.isArray(object.material)
+      ? object.material.map(prepareMaterial)
+      : prepareMaterial(object.material);
+    object.castShadow = false;
+    object.receiveShadow = true;
+  });
+
+  const bounds = new Box3().setFromObject(clone);
+  const center = bounds.getCenter(new Vector3());
+  clone.position.set(-center.x, -bounds.min.y, -center.z);
   return clone;
 }
 
@@ -160,13 +221,20 @@ function AssetModel({
   name,
   color,
   animate = true,
+  castShadow = true,
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   scale = 1
 }: AssetModelProps) {
   const group = useRef<Group>(null);
-  const { scene, animations } = useGLTF(modelPath(name));
-  const model = useMemo(() => prepareModel(scene, color), [color, scene]);
+  const { scene, animations } = useGLTF(
+    modelPath(name),
+    name.endsWith("-hyper3d") ? "/draco/" : false
+  );
+  const model = useMemo(
+    () => prepareModel(scene, color, castShadow),
+    [castShadow, color, scene]
+  );
   const { actions } = useAnimations(animations, group);
 
   useEffect(() => {
@@ -178,6 +246,92 @@ function AssetModel({
   return (
     <group ref={group} position={position} rotation={rotation} scale={scale}>
       <primitive object={model} />
+    </group>
+  );
+}
+
+function WhirlpoolEffect({ tile }: { tile: TileView }) {
+  const root = useRef<Group>(null);
+  const modelGroup = useRef<Group>(null);
+  const materials = useRef<Material[]>([]);
+  const elapsed = useRef(0);
+  const { x, z } = hexToWorld(tile);
+  const adjacentOffsets = useMemo(() => {
+    const directions = [
+      [1, 0], [1, -1], [0, -1],
+      [-1, 0], [-1, 1], [0, 1]
+    ] as const;
+    return directions.map(([q, r]) => {
+      const neighbor = hexToWorld({ q: tile.q + q, r: tile.r + r });
+      return [neighbor.x - x, neighbor.z - z] as const;
+    });
+  }, [tile.q, tile.r, x, z]);
+  const { scene } = useGLTF(whirlpoolModelPath, "/draco/");
+  const model = useMemo(() => {
+    const prepared = prepareWhirlpoolModel(scene);
+    const nextMaterials: Material[] = [];
+    prepared.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const values = Array.isArray(object.material) ? object.material : [object.material];
+      nextMaterials.push(...values);
+    });
+    materials.current = nextMaterials;
+    return prepared;
+  }, [scene]);
+
+  useFrame((_, delta) => {
+    if (!root.current || !modelGroup.current) return;
+    elapsed.current = Math.min(WHIRLPOOL_DURATION, elapsed.current + delta);
+    const progress = elapsed.current / WHIRLPOOL_DURATION;
+    const enter = Math.min(1, progress / 0.2);
+    const exit = Math.max(0, Math.min(1, (progress - 0.72) / 0.28));
+    const enterEase = enter * enter * (3 - 2 * enter);
+    const exitEase = exit * exit;
+    const scale = Math.max(0.01, enterEase * (1 - exitEase));
+
+    root.current.scale.setScalar(scale);
+    root.current.position.y = -0.5 - exitEase * 0.5;
+    modelGroup.current.rotation.y += delta * (2.2 + progress * 5.5);
+    materials.current.forEach((material) => {
+      material.opacity = Math.max(0, 1 - exitEase);
+    });
+  });
+
+  return (
+    <group ref={root} position={[x, -0.5, z]} scale={0.01}>
+      <group ref={modelGroup} rotation={[0, tileVariant(tile.id, 8) * Math.PI / 4, 0]} scale={0.9}>
+        <primitive object={model} />
+      </group>
+      {[0.78, 1.08].map((radius, index) => (
+        <mesh key={radius} rotation-x={-Math.PI / 2} position-y={0.16 + index * 0.018}>
+          <ringGeometry args={[radius, radius + 0.07, 32]} />
+          <meshBasicMaterial
+            color={index === 0 ? "#e9ffff" : "#75deda"}
+            transparent
+            opacity={0.72 - index * 0.16}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+      {adjacentOffsets.map(([offsetX, offsetZ], neighborIndex) => (
+        <group
+          key={`${offsetX}-${offsetZ}`}
+          position={[offsetX, 0.1, offsetZ]}
+          rotation-y={neighborIndex * Math.PI / 3}
+        >
+          {[0.58, 0.84].map((radius, ringIndex) => (
+            <mesh key={radius} rotation-x={-Math.PI / 2} position-y={ringIndex * 0.016}>
+              <ringGeometry args={[radius, radius + 0.055, 24]} />
+              <meshBasicMaterial
+                color={ringIndex === 0 ? "#e8ffff" : "#68d7d5"}
+                transparent
+                opacity={0.54 - ringIndex * 0.16}
+                depthWrite={false}
+              />
+            </mesh>
+          ))}
+        </group>
+      ))}
     </group>
   );
 }
@@ -205,21 +359,23 @@ function HeroAssetModel({
 [
   "explorer",
   "shark",
-  "tree-palm",
-  "tree-coastal",
-  "tree-jungle",
   "kaiju",
   "sea-serpent",
   "raft",
-  "volcano",
-  "rescue-dock",
-  "whirlpool",
-  "coral-reef",
-  "floating-debris",
+  "rescue-dock-hyper3d",
   "terrain-beach",
   "terrain-forest",
-  "terrain-mountain"
-].forEach((name) => useGLTF.preload(modelPath(name)));
+  "terrain-mountain",
+  "terrain-beach-hyper3d",
+  "terrain-forest-hyper3d",
+  "terrain-mountain-hyper3d"
+].forEach((name) => useGLTF.preload(
+  modelPath(name),
+  name.endsWith("-hyper3d") ? "/draco/" : false
+));
+
+useGLTF.preload(whirlpoolModelPath, "/draco/");
+useGLTF.preload(volcanoModelPath, "/draco/");
 
 (["explorer", "shark", "sea-serpent", "kaiju", "raft"] satisfies HeroModelName[])
   .forEach((name) => useGLTF.preload(heroModelPath(name)));
@@ -291,7 +447,7 @@ function DayLighting({ stage }: { stage: DayStage }) {
   const targetHemisphereSky = useMemo(() => new Color(stage.hemisphereSky), [stage.hemisphereSky]);
   const targetHemisphereGround = useMemo(() => new Color(stage.hemisphereGround), [stage.hemisphereGround]);
 
-  useFrame(({ scene }, delta) => {
+  useFrame(({ gl, scene }, delta) => {
     const colorStep = Math.min(1, delta * 0.75);
     background.current.lerp(targetBackground, colorStep);
     fog.current.lerp(targetFog, colorStep);
@@ -313,6 +469,8 @@ function DayLighting({ stage }: { stage: DayStage }) {
       hemisphere.current.intensity +=
         (stage.hemisphereIntensity - hemisphere.current.intensity) * Math.min(1, delta * 0.8);
     }
+    gl.toneMappingExposure +=
+      (stage.exposure - gl.toneMappingExposure) * Math.min(1, delta * 0.8);
   });
 
   return (
@@ -341,27 +499,42 @@ function DayLighting({ stage }: { stage: DayStage }) {
   );
 }
 
-function TerrainDetails({ terrain, tileId }: { terrain: Terrain; tileId: string }) {
+function TerrainDetails({
+  terrain,
+  tileId,
+  makeRoomForKaiju = false
+}: {
+  terrain: Terrain;
+  tileId: string;
+  makeRoomForKaiju?: boolean;
+}) {
+  const rotation = (tileVariant(tileId, 3) - 1) * (terrain === "beach" ? 0.14 : 0.12);
+  const accommodation = makeRoomForKaiju
+    ? { position: [-0.12, 0, -0.34] as [number, number, number], scale: 0.7 }
+    : { position: [0, 0, 0] as [number, number, number], scale: 1 };
   if (terrain === "forest") {
     return (
-      <group position={[-0.12, 0.2, -0.1]}>
-        <AssetModel name="terrain-forest" rotation={[0, (tileVariant(tileId, 3) - 1) * 0.12, 0]} scale={0.82} />
+      <group position={accommodation.position} scale={accommodation.scale}>
+        <group position={[-0.12, 0.2, -0.1]}>
+          <AssetModel name="terrain-forest-hyper3d" castShadow={false} rotation={[0, rotation, 0]} scale={0.82} />
+        </group>
       </group>
     );
   }
   if (terrain === "mountain") {
     return (
-      <group position={[-0.08, 0.28, -0.08]}>
-        <AssetModel name="terrain-mountain" rotation={[0, (tileVariant(tileId, 3) - 1) * 0.12, 0]} scale={0.84} />
+      <group position={accommodation.position} scale={accommodation.scale}>
+        <group position={[-0.08, 0.28, -0.08]}>
+          <AssetModel name="terrain-mountain-hyper3d" castShadow={false} rotation={[0, rotation, 0]} scale={0.84} />
+        </group>
       </group>
     );
   }
   return (
-    <group position={[-0.1, 0.2, -0.08]}>
-      <AssetModel name="terrain-beach" rotation={[0, (tileVariant(tileId, 3) - 1) * 0.14, 0]} scale={0.84} />
-      {tileVariant(tileId, 4) === 0 && (
-        <AssetModel name="tree-palm" position={[-0.34, 0.04, -0.36]} rotation={[0, 0.6, 0]} scale={0.16} />
-      )}
+    <group position={accommodation.position} scale={accommodation.scale}>
+      <group position={[-0.1, 0.2, -0.08]}>
+        <AssetModel name="terrain-beach-hyper3d" castShadow={false} rotation={[0, rotation, 0]} scale={0.84} />
+      </group>
     </group>
   );
 }
@@ -470,7 +643,7 @@ function SinkingTile({ tile }: { tile: TileView }) {
         </mesh>
         <mesh position-y={tile.terrain === "mountain" ? -0.25 : -0.19} receiveShadow>
           <cylinderGeometry args={[1.12, 1.02, 0.18, 6]} />
-          <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
+          <meshStandardMaterial color={terrainSideColor[tile.terrain]} roughness={0.96} />
         </mesh>
         <TerrainDetails terrain={tile.terrain} tileId={tile.id} />
       </group>
@@ -502,32 +675,34 @@ function Tile({
   tile,
   highlighted,
   selected,
+  kaijuPresent = false,
   suppressReveal,
   onClick
 }: {
   tile: TileView;
   highlighted: boolean;
   selected: boolean;
+  kaijuPresent?: boolean;
   suppressReveal?: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const { x, z } = hexToWorld(tile);
   if (!tile.active) {
-    if (!tile.revealedEffect || suppressReveal) return null;
+    if (tile.revealedEffect !== "volcano" || suppressReveal) return null;
     return (
       <group
-        position={[x, tile.revealedEffect === "volcano" ? -0.28 : -0.16, z]}
+        position={[x, -0.28, z]}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
         }}
       >
-        <AssetModel
-          name={tile.revealedEffect}
+        <VolcanoModel
           rotation={[0, tileVariant(tile.id, 8) * Math.PI / 4, 0]}
-          scale={tile.revealedEffect === "volcano" ? 0.88 : 0.82}
+          scale={1.18}
         />
+        <pointLight color="#ff5a19" intensity={5.5} distance={3.4} position={[0, 0.92, 0]} />
       </group>
     );
   }
@@ -539,7 +714,11 @@ function Tile({
           <circleGeometry args={[1.18, 32]} />
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
-        <AssetModel name="rescue-dock" rotation={[0, tileVariant(tile.id, 4) * Math.PI / 2, 0]} scale={0.86} />
+        <AssetModel
+          name="rescue-dock-hyper3d"
+          rotation={[0, Math.atan2(-x, -z), 0]}
+          scale={0.86}
+        />
         {highlighted && (
           <mesh rotation-x={-Math.PI / 2} position-y={0.22}>
             <ringGeometry args={[0.82, 1.02, 32]} />
@@ -572,15 +751,15 @@ function Tile({
         <meshStandardMaterial
           color={terrainColor[tile.terrain]}
           roughness={0.82}
-          emissive={highlighted || selected ? "#685513" : "#000000"}
-          emissiveIntensity={highlighted ? 0.6 : selected ? 0.35 : 0}
+          emissive={selected ? "#685513" : "#000000"}
+          emissiveIntensity={selected ? 0.35 : 0}
         />
       </mesh>
       <mesh position-y={tile.terrain === "mountain" ? -0.25 : -0.19} receiveShadow>
         <cylinderGeometry args={[1.12, 1.02, 0.18, 6]} />
-        <meshStandardMaterial color={tile.terrain === "beach" ? "#a97643" : "#355e48"} roughness={0.96} />
+        <meshStandardMaterial color={terrainSideColor[tile.terrain]} roughness={0.96} />
       </mesh>
-      <TerrainDetails terrain={tile.terrain} tileId={tile.id} />
+      <TerrainDetails terrain={tile.terrain} tileId={tile.id} makeRoomForKaiju={kaijuPresent} />
       {(highlighted || selected) && (
         <mesh rotation-x={-Math.PI / 2} position-y={0.28}>
           <ringGeometry args={[0.72, 0.86, 6]} />
@@ -766,20 +945,20 @@ function CreaturePiece({
   const activeLand = "terrain" in space && space.active && !space.isRescue;
   const landHeight = activeLand ? (space.terrain === "mountain" ? 0.56 : 0.36) : 0;
   const settings = creature.type === "shark"
-    ? { name: "shark" as const, scale: 0.5, y: 0.02, rotation: -0.5, x: 0, z: 0 }
+    ? { name: "shark" as const, scale: 0.7, y: 0.02, rotation: -0.5, x: 0, z: 0 }
     : creature.type === "sea-serpent"
-      ? { name: "sea-serpent" as const, scale: 0.52, y: 0.02, rotation: 0.35, x: 0, z: 0 }
+      ? { name: "sea-serpent" as const, scale: 0.72, y: 0.02, rotation: 0.35, x: 0, z: 0 }
       : {
           name: "kaiju" as const,
-          scale: activeLand ? 0.4 : 0.43,
+          scale: activeLand ? 0.5 : 0.62,
           y: activeLand ? landHeight : 0.12,
           rotation: 0.15,
-          x: placement?.x ?? 0,
-          z: placement?.z ?? 0
+          x: activeLand ? 0.12 : (placement?.x ?? 0) * 0.45,
+          z: activeLand ? 0.34 : (placement?.z ?? 0) * 0.45
         };
   if (creature.type !== "kaiju") {
-    settings.x = placement?.x ?? 0;
-    settings.z = placement?.z ?? 0;
+    settings.x = (placement?.x ?? 0) * 0.45;
+    settings.z = (placement?.z ?? 0) * 0.45;
   }
   return (
     <Float speed={1.8} floatIntensity={0.12} rotationIntensity={0.08}>
@@ -799,13 +978,13 @@ function CreaturePiece({
           />
           {creature.type === "kaiju" && (
             <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
-              <circleGeometry args={[0.38, 28]} />
+              <circleGeometry args={[activeLand ? 0.44 : 0.52, 28]} />
               <meshBasicMaterial color="#173d70" transparent opacity={0.55} />
             </mesh>
           )}
           {selected && (
             <mesh rotation-x={-Math.PI / 2} position-y={-0.04}>
-              <ringGeometry args={[0.5, 0.64, 28]} />
+              <ringGeometry args={[0.66, 0.8, 28]} />
               <meshBasicMaterial color="#fff0a4" transparent opacity={0.95} />
             </mesh>
           )}
@@ -815,108 +994,109 @@ function CreaturePiece({
   );
 }
 
-function CreatureDieRoll({ roll, rollId, rolledAt }: { roll: CreatureRoll; rollId: number; rolledAt: string }) {
+function normalizeDieFaceBackground(source: Texture) {
+  const image = source.image as HTMLImageElement;
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return source;
+
+  context.drawImage(image, 0, 0, width, height);
+  const imageData = context.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+  const visited = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  const seedRed = pixels[0];
+  const seedGreen = pixels[1];
+  const seedBlue = pixels[2];
+  let head = 0;
+  let tail = 1;
+  queue[0] = 0;
+  visited[0] = 1;
+
+  while (head < tail) {
+    const pixelIndex = queue[head++];
+    const offset = pixelIndex * 4;
+    pixels[offset] = 255;
+    pixels[offset + 1] = 255;
+    pixels[offset + 2] = 255;
+
+    const x = pixelIndex % width;
+    const y = Math.floor(pixelIndex / width);
+    const neighbors = [
+      x > 0 ? pixelIndex - 1 : -1,
+      x < width - 1 ? pixelIndex + 1 : -1,
+      y > 0 ? pixelIndex - width : -1,
+      y < height - 1 ? pixelIndex + width : -1
+    ];
+    neighbors.forEach((neighbor) => {
+      if (neighbor < 0 || visited[neighbor]) return;
+      const neighborOffset = neighbor * 4;
+      const matchesBackground =
+        Math.abs(pixels[neighborOffset] - seedRed) <= 18 &&
+        Math.abs(pixels[neighborOffset + 1] - seedGreen) <= 18 &&
+        Math.abs(pixels[neighborOffset + 2] - seedBlue) <= 18;
+      if (!matchesBackground) return;
+      visited[neighbor] = 1;
+      queue[tail++] = neighbor;
+    });
+  }
+
+  context.putImageData(imageData, 0, 0);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.flipY = source.flipY;
+  texture.wrapS = source.wrapS;
+  texture.wrapT = source.wrapT;
+  texture.magFilter = source.magFilter;
+  texture.minFilter = source.minFilter;
+  texture.generateMipmaps = source.generateMipmaps;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function useDieFaceTextures() {
+  const [serpentTexture, sharkTexture, kaijuTexture] = useTexture([
+    "/assets/ui/dice/sea-serpent.png",
+    "/assets/ui/dice/shark.png",
+    "/assets/ui/dice/kaiju.png"
+  ]);
+  const faceTextures = useMemo(() => {
+    return {
+      serpent: normalizeDieFaceBackground(serpentTexture),
+      shark: normalizeDieFaceBackground(sharkTexture),
+      kaiju: normalizeDieFaceBackground(kaijuTexture)
+    };
+  }, [kaijuTexture, serpentTexture, sharkTexture]);
+  useEffect(() => () => {
+    Object.values(faceTextures).forEach((texture) => {
+      if (texture !== serpentTexture && texture !== sharkTexture && texture !== kaijuTexture) {
+        texture.dispose();
+      }
+    });
+  }, [faceTextures, kaijuTexture, serpentTexture, sharkTexture]);
+  return faceTextures;
+}
+
+function CreatureDieRoll({
+  roll,
+  rollId,
+  rolledAt,
+  faceTextures
+}: {
+  roll: CreatureRoll;
+  rollId: number;
+  rolledAt: string;
+  faceTextures: ReturnType<typeof useDieFaceTextures>;
+}) {
   const die = useRef<Group>(null);
   const elapsed = useRef(0);
   const isRecent = () => Date.now() - new Date(rolledAt).getTime() < 6000;
   const [visible, setVisible] = useState(isRecent);
-  const faceTextures = useMemo(() => {
-    const makeTexture = (type: CreatureRoll) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 256;
-      canvas.height = 256;
-      const context = canvas.getContext("2d")!;
-      const palette = type === "sea-serpent"
-        ? { background: "#d66757", ink: "#fff2d2", label: "海蛇" }
-        : type === "shark"
-          ? { background: "#208d99", ink: "#eafff7", label: "鲨鱼" }
-          : { background: "#326fa0", ink: "#f4f0c9", label: "巨兽" };
-
-      context.fillStyle = palette.background;
-      context.fillRect(0, 0, 256, 256);
-      context.strokeStyle = "rgba(255,255,255,0.2)";
-      context.lineWidth = 8;
-      context.strokeRect(14, 14, 228, 228);
-      context.fillStyle = palette.ink;
-      context.strokeStyle = palette.ink;
-
-      if (type === "sea-serpent") {
-        context.lineCap = "round";
-        context.lineJoin = "round";
-        context.lineWidth = 30;
-        context.beginPath();
-        context.moveTo(53, 144);
-        context.bezierCurveTo(76, 80, 134, 194, 184, 103);
-        context.stroke();
-        context.beginPath();
-        context.arc(190, 89, 25, 0, Math.PI * 2);
-        context.fill();
-        context.fillStyle = palette.background;
-        context.beginPath();
-        context.arc(198, 82, 4, 0, Math.PI * 2);
-        context.fill();
-      } else if (type === "shark") {
-        context.beginPath();
-        context.moveTo(43, 140);
-        context.quadraticCurveTo(112, 72, 195, 126);
-        context.lineTo(224, 99);
-        context.lineTo(214, 151);
-        context.lineTo(229, 181);
-        context.lineTo(188, 164);
-        context.quadraticCurveTo(102, 201, 43, 140);
-        context.fill();
-        context.beginPath();
-        context.moveTo(111, 106);
-        context.lineTo(137, 56);
-        context.lineTo(157, 117);
-        context.fill();
-        context.fillStyle = palette.background;
-        context.beginPath();
-        context.arc(170, 128, 4, 0, Math.PI * 2);
-        context.fill();
-      } else {
-        context.beginPath();
-        context.moveTo(70, 180);
-        context.lineTo(62, 124);
-        context.lineTo(83, 88);
-        context.lineTo(108, 79);
-        context.lineTo(126, 52);
-        context.lineTo(139, 82);
-        context.lineTo(164, 92);
-        context.lineTo(183, 130);
-        context.lineTo(178, 180);
-        context.lineTo(148, 180);
-        context.lineTo(143, 145);
-        context.lineTo(104, 145);
-        context.lineTo(99, 180);
-        context.fill();
-        [79, 99, 120, 143].forEach((x, index) => {
-          context.beginPath();
-          context.moveTo(x, 99 - index * 5);
-          context.lineTo(x - 18, 70 - index * 5);
-          context.lineTo(x + 7, 82 - index * 3);
-          context.fill();
-        });
-        context.fillStyle = palette.background;
-        context.beginPath();
-        context.arc(151, 108, 4, 0, Math.PI * 2);
-        context.fill();
-      }
-
-      context.fillStyle = palette.ink;
-      context.font = "bold 25px sans-serif";
-      context.textAlign = "center";
-      context.fillText(palette.label, 128, 224);
-      const texture = new CanvasTexture(canvas);
-      texture.colorSpace = SRGBColorSpace;
-      return texture;
-    };
-    return {
-      serpent: makeTexture("sea-serpent"),
-      shark: makeTexture("shark"),
-      kaiju: makeTexture("kaiju")
-    };
-  }, []);
   const finalRotation: [number, number, number] = roll === "sea-serpent"
     ? [0, 0, Math.PI / 2]
     : roll === "shark"
@@ -929,12 +1109,6 @@ function CreatureDieRoll({ roll, rollId, rolledAt }: { roll: CreatureRoll; rollI
     const timer = window.setTimeout(() => setVisible(false), 5000);
     return () => window.clearTimeout(timer);
   }, [rollId, rolledAt]);
-
-  useEffect(() => () => {
-    faceTextures.serpent.dispose();
-    faceTextures.shark.dispose();
-    faceTextures.kaiju.dispose();
-  }, [faceTextures]);
 
   useFrame((_, delta) => {
     if (!die.current || !visible) return;
@@ -961,20 +1135,20 @@ function CreatureDieRoll({ roll, rollId, rolledAt }: { roll: CreatureRoll; rollI
     <group ref={die} position={[0, 4.8, 0]}>
       <mesh castShadow>
         <boxGeometry args={[1.65, 1.65, 1.65]} />
-        <meshStandardMaterial attach="material-0" map={faceTextures.serpent} roughness={0.42} />
-        <meshStandardMaterial attach="material-1" map={faceTextures.serpent} roughness={0.42} />
-        <meshStandardMaterial attach="material-2" map={faceTextures.shark} roughness={0.42} />
-        <meshStandardMaterial attach="material-3" map={faceTextures.shark} roughness={0.42} />
-        <meshStandardMaterial attach="material-4" map={faceTextures.kaiju} roughness={0.42} />
-        <meshStandardMaterial attach="material-5" map={faceTextures.kaiju} roughness={0.42} />
-        <Edges color="#f7edcf" threshold={10} />
+        <meshStandardMaterial attach="material-0" color="#ffffff" map={faceTextures.serpent} roughness={0.42} />
+        <meshStandardMaterial attach="material-1" color="#ffffff" map={faceTextures.serpent} roughness={0.42} />
+        <meshStandardMaterial attach="material-2" color="#ffffff" map={faceTextures.shark} roughness={0.42} />
+        <meshStandardMaterial attach="material-3" color="#ffffff" map={faceTextures.shark} roughness={0.42} />
+        <meshStandardMaterial attach="material-4" color="#ffffff" map={faceTextures.kaiju} roughness={0.42} />
+        <meshStandardMaterial attach="material-5" color="#ffffff" map={faceTextures.kaiju} roughness={0.42} />
+        <Edges color="#ffffff" threshold={10} />
       </mesh>
     </group>
   );
 }
 
 function PreviewIsland() {
-  const coords = useMemo(() => createIslandCoords(40), []);
+  const coords = useMemo(() => createIslandCoords(40, { excludeCenter: true }), []);
   return (
     <>
       {coords.map((coord, index) => {
@@ -985,32 +1159,142 @@ function PreviewIsland() {
   );
 }
 
-function OceanDecorations({ spaces }: { spaces: WaterSpaceView[] }) {
+const hexKeySafe = ({ q, r }: { q: number; r: number }) => `${q}:${r}`;
+
+function roundAxial(q: number, r: number) {
+  let cubeX = q;
+  let cubeZ = r;
+  let cubeY = -cubeX - cubeZ;
+  let roundedX = Math.round(cubeX);
+  let roundedY = Math.round(cubeY);
+  let roundedZ = Math.round(cubeZ);
+  const xDiff = Math.abs(roundedX - cubeX);
+  const yDiff = Math.abs(roundedY - cubeY);
+  const zDiff = Math.abs(roundedZ - cubeZ);
+  if (xDiff > yDiff && xDiff > zDiff) roundedX = -roundedY - roundedZ;
+  else if (yDiff > zDiff) roundedY = -roundedX - roundedZ;
+  else roundedZ = -roundedX - roundedY;
+  return { q: roundedX, r: roundedZ };
+}
+
+function MarkerPointerController({
+  spaces,
+  onPlace
+}: {
+  spaces: Array<TileView | WaterSpaceView>;
+  onPlace: (locationId: string) => void;
+}) {
+  const { camera, gl } = useThree();
+  const spacesRef = useRef(spaces);
+  const onPlaceRef = useRef(onPlace);
+  spacesRef.current = spaces;
+  onPlaceRef.current = onPlace;
+
+  useEffect(() => {
+    const raycaster = new Raycaster();
+    const pointer = new Vector2();
+    const boardPlane = new Plane(new Vector3(0, 1, 0), 0);
+    const intersection = new Vector3();
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0 || !useGameStore.getState().markerHotkeyPressed) return;
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("button, input, textarea, .game-topbar, .score-panel, .event-panel, .log-dialog, .result-panel")
+      ) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      if (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      ) return;
+      pointer.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.setFromCamera(pointer, camera);
+      if (!raycaster.ray.intersectPlane(boardPlane, intersection)) return;
+      const localX = intersection.x / BOARD_SCALE;
+      const localZ = intersection.z / BOARD_SCALE;
+      const size = 1.12;
+      const axial = roundAxial(
+        (Math.sqrt(3) / 3 * localX - localZ / 3) / size,
+        (2 / 3 * localZ) / size
+      );
+      const location = spacesRef.current.find((space) => space.q === axial.q && space.r === axial.r);
+      if (!location) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onPlaceRef.current(location.id);
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [camera, gl]);
+
+  return null;
+}
+
+function MapMarker({ color, name }: { color: string; name: string }) {
+  const pointer = useRef<Group>(null);
+  const target = useRef<Group>(null);
+
+  useFrame(({ clock }) => {
+    const pulse = (Math.sin(clock.elapsedTime * 4.5) + 1) / 2;
+    if (pointer.current) pointer.current.position.y = 2.08 + pulse * 0.12;
+    if (target.current) target.current.scale.setScalar(0.92 + pulse * 0.18);
+  });
+
+  const overlayMaterial = {
+    depthTest: false,
+    depthWrite: false,
+    transparent: true
+  } as const;
+
   return (
-    <>
-      {spaces.map((space, index) => {
-        const { x, z } = hexToWorld(space);
-        const coral = index % 2 === 0;
-        return (
-          <group key={space.id} position={[x, coral ? -0.42 : -0.18, z]}>
-            <AssetModel
-              name={coral ? "coral-reef" : "floating-debris"}
-              rotation={[0, tileVariant(space.id, 8) * Math.PI / 4, 0]}
-              scale={coral ? 0.58 : 0.62}
-            />
-          </group>
-        );
-      })}
-    </>
+    <group>
+      <group ref={target} position-y={0.58} rotation-x={-Math.PI / 2}>
+        <mesh renderOrder={98}>
+          <ringGeometry args={[0.34, 0.54, 32]} />
+          <meshBasicMaterial color="#ffffff" opacity={0.92} {...overlayMaterial} />
+        </mesh>
+        <mesh position-z={0.012} renderOrder={99}>
+          <ringGeometry args={[0.4, 0.49, 32]} />
+          <meshBasicMaterial color={color} opacity={1} {...overlayMaterial} />
+        </mesh>
+      </group>
+      <group ref={pointer} position-y={2.08}>
+        <mesh position-y={-0.7} renderOrder={98}>
+          <cylinderGeometry args={[0.035, 0.035, 1.08, 10]} />
+          <meshBasicMaterial color="#ffffff" opacity={0.9} {...overlayMaterial} />
+        </mesh>
+        <mesh position-y={-1.18} rotation-z={Math.PI} renderOrder={99}>
+          <coneGeometry args={[0.2, 0.46, 20]} />
+          <meshBasicMaterial color={color} opacity={1} {...overlayMaterial} />
+        </mesh>
+        <mesh renderOrder={98}>
+          <sphereGeometry args={[0.3, 24, 16]} />
+          <meshBasicMaterial color="#ffffff" opacity={0.96} {...overlayMaterial} />
+        </mesh>
+        <mesh renderOrder={99}>
+          <sphereGeometry args={[0.23, 24, 16]} />
+          <meshBasicMaterial color={color} opacity={1} {...overlayMaterial} />
+        </mesh>
+        <Html center position={[0, 0.56, 0]} distanceFactor={14} zIndexRange={[1000, 900]}>
+          <span className="map-marker-label" style={{ "--marker-color": color } as CSSProperties}>
+            {name}
+          </span>
+        </Html>
+      </group>
+    </group>
   );
 }
 
-const hexKeySafe = ({ q, r }: { q: number; r: number }) => `${q}:${r}`;
-
 export function BoardScene({ room }: { room: PublicRoomState | null }) {
+  const dieFaceTextures = useDieFaceTextures();
   const {
     clientId, role, selectedExplorerId, selectedRaftId, selectedCreatureId,
-    activeAbility, selectExplorer, selectRaft, selectCreature, setActiveAbility, showNotice
+    activeAbility, markerHotkeyPressed,
+    selectExplorer, selectRaft, selectCreature, setActiveAbility, showNotice
   } = useGameStore(useShallow((state) => ({
     clientId: state.clientId,
     role: state.role,
@@ -1018,6 +1302,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     selectedRaftId: state.selectedRaftId,
     selectedCreatureId: state.selectedCreatureId,
     activeAbility: state.activeAbility,
+    markerHotkeyPressed: state.markerHotkeyPressed,
     selectExplorer: state.selectExplorer,
     selectRaft: state.selectRaft,
     selectCreature: state.selectCreature,
@@ -1035,7 +1320,9 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   const terrainRank: Record<Terrain, number> = { beach: 0, forest: 1, mountain: 2 };
   const previousTiles = useRef<Map<string, TileView> | null>(null);
   const sinkTimers = useRef(new Map<string, number>());
+  const whirlpoolTimers = useRef(new Map<string, number>());
   const [sinkingTiles, setSinkingTiles] = useState<TileView[]>([]);
+  const [whirlpoolEffects, setWhirlpoolEffects] = useState<Array<{ id: string; tileId: string }>>([]);
   const [sinkRequestPending, setSinkRequestPending] = useState(false);
   const dayStage = dayStageFor(room);
 
@@ -1043,6 +1330,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     if (!room) {
       previousTiles.current = null;
       setSinkingTiles([]);
+      setWhirlpoolEffects([]);
       setSinkRequestPending(false);
       return;
     }
@@ -1068,6 +1356,24 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
           }, SINK_DURATION * 1000);
           sinkTimers.current.set(tile.id, timer);
         });
+
+        const newWhirlpools = room.tiles
+          .filter((tile) =>
+            !tile.active &&
+            tile.revealedEffect === "whirlpool" &&
+            previous.get(tile.id)?.active
+          )
+          .map((tile) => ({ id: `${tile.id}-${room.revision}`, tileId: tile.id }));
+        if (newWhirlpools.length) {
+          setWhirlpoolEffects((current) => [...current, ...newWhirlpools]);
+          newWhirlpools.forEach(({ id }) => {
+            const timer = window.setTimeout(() => {
+              whirlpoolTimers.current.delete(id);
+              setWhirlpoolEffects((current) => current.filter((effect) => effect.id !== id));
+            }, WHIRLPOOL_DURATION * 1000);
+            whirlpoolTimers.current.set(id, timer);
+          });
+        }
       }
     }
     previousTiles.current = nextTiles;
@@ -1076,6 +1382,8 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   useEffect(() => () => {
     sinkTimers.current.forEach((timer) => window.clearTimeout(timer));
     sinkTimers.current.clear();
+    whirlpoolTimers.current.forEach((timer) => window.clearTimeout(timer));
+    whirlpoolTimers.current.clear();
   }, []);
 
   const sinkingTileIds = useMemo(() => new Set(sinkingTiles.map((tile) => tile.id)), [sinkingTiles]);
@@ -1087,11 +1395,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
 
     for (const space of allSpaces) {
       const tile = room.tiles.find((candidate) => candidate.id === space.id);
-      const slots = tile?.isRescue
-        ? rescueUnitSlots
-        : tile?.active
-          ? landUnitSlots
-          : waterUnitSlots;
+      const slots = tile?.active ? landUnitSlots : waterUnitSlots;
       const units = [
         ...room.creatures
           .filter((creature) => creature.locationId === space.id)
@@ -1103,7 +1407,8 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
           .filter((explorer) =>
             explorer.locationId === space.id &&
             !explorer.raftId &&
-            !explorer.lost
+            !explorer.lost &&
+            !explorer.rescued
           )
           .map((explorer) => ({ id: explorer.id, priority: 3 }))
       ].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
@@ -1115,18 +1420,6 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     }
     return placements;
   }, [allSpaces, room]);
-  const oceanDecorations = useMemo(() => {
-    if (!room) return [];
-    const occupied = new Set([
-      ...room.rafts.map((raft) => raft.locationId),
-      ...room.creatures.map((creature) => creature.locationId),
-      ...room.explorers.flatMap((explorer) => explorer.locationId ? [explorer.locationId] : [])
-    ]);
-    return room.waterSpaces
-      .filter((space) => !occupied.has(space.id) && tileVariant(space.id, 13) === 0)
-      .slice(0, 12);
-  }, [room]);
-
   const moveTargets = useMemo(() => {
     if (!room || !myTurn) return new Set<string>();
     if (room.turnPhase === "setup-explorer") {
@@ -1140,6 +1433,9 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     if (room.turnPhase === "setup-raft") {
       return new Set(room.waterSpaces.filter((space) =>
         !room.rafts.some((raft) => raft.locationId === space.id) &&
+        !room.creatures.some((creature) =>
+          creature.type === "sea-serpent" && creature.locationId === space.id
+        ) &&
         room.tiles.some((tile) => tile.active && !tile.isRescue && areAdjacent(space, tile))
       ).map((space) => space.id));
     }
@@ -1147,60 +1443,164 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
       return new Set(room.pendingChoice.allowedTargetIds ?? []);
     }
     if (room.turnPhase === "creature-move" && selectedCreature && selectedCreatureSpace) {
-      return new Set(allSpaces.filter((space) => {
-        const land = room.tiles.find((tile) => tile.id === space.id);
-        return room.pendingChoice?.type === "move-creature" &&
-          areAdjacent(selectedCreatureSpace, space) && !land?.isRescue &&
-          (selectedCreature.type === "kaiju" || room.waterSpaces.some((water) => water.id === space.id) || (land && !land.active && !land.blocked));
-      }).map((space) => space.id));
+      const maxSteps = room.pendingChoice?.type === "move-creature"
+        ? room.pendingChoice.stepsRemaining ?? 0
+        : 0;
+      const hasCreatureInteraction = (locationId: string) => {
+        const explorers = room.explorers.filter((explorer) =>
+          explorer.locationId === locationId &&
+          !explorer.lost &&
+          !explorer.rescued
+        );
+        if (selectedCreature.type === "sea-serpent") {
+          return explorers.length > 0 || room.rafts.some((raft) => raft.locationId === locationId);
+        }
+        if (selectedCreature.type === "shark") {
+          return explorers.some((explorer) => explorer.swimming);
+        }
+        return explorers.length > 0 ||
+          room.rafts.some((raft) => raft.locationId === locationId) ||
+          room.creatures.some((creature) =>
+            creature.id !== selectedCreature.id && creature.locationId === locationId
+          );
+      };
+      const reachable = new Set<string>();
+      let frontier = new Set([selectedCreature.locationId]);
+      for (let step = 0; step < maxSteps; step += 1) {
+        const next = new Set<string>();
+        for (const fromId of frontier) {
+          const from = allSpaces.find((space) => space.id === fromId);
+          if (!from) continue;
+          for (const space of allSpaces) {
+            const land = room.tiles.find((tile) => tile.id === space.id);
+            const legal = areAdjacent(from, space) && !land?.isRescue &&
+              (selectedCreature.type === "kaiju" ||
+                room.waterSpaces.some((water) => water.id === space.id) ||
+                Boolean(land && !land.active && !land.blocked)) &&
+              !(selectedCreature.type !== "kaiju" && room.creatures.some((creature) =>
+                creature.type === "kaiju" && creature.locationId === space.id
+              )) &&
+              !(selectedCreature.type === "kaiju" && room.creatures.some((creature) =>
+                creature.id !== selectedCreature.id &&
+                creature.type === "kaiju" &&
+                creature.locationId === space.id
+              ));
+            if (!legal || reachable.has(space.id) || space.id === selectedCreature.locationId) continue;
+            reachable.add(space.id);
+            if (!hasCreatureInteraction(space.id)) next.add(space.id);
+          }
+        }
+        frontier = next;
+      }
+      return reachable;
     }
     if (room.turnPhase !== "action") return new Set<string>();
     if (activeAbility === "paddles" && selectedRaft && selectedRaftSpace) {
       const aboardIds = room.explorers
         .filter((explorer) => explorer.raftId === selectedRaft.id && !explorer.lost && !explorer.rescued)
         .map((explorer) => explorer.id);
+      const isWaterSpace = (space: TileView | WaterSpaceView) =>
+        room.waterSpaces.some((water) => water.id === space.id) ||
+        room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked);
+      const hasCapacity = (locationId: string) =>
+        room.explorers.filter((explorer) =>
+          explorer.locationId === locationId &&
+          !explorer.lost &&
+          !aboardIds.includes(explorer.id)
+        ).length + aboardIds.length <= EXPLORER_SPACE_CAPACITY;
       return new Set(allSpaces.filter((space) => {
         const distance = Math.max(
           Math.abs(selectedRaftSpace.q - space.q),
           Math.abs(selectedRaftSpace.r - space.r),
           Math.abs(selectedRaftSpace.q + selectedRaftSpace.r - space.q - space.r)
         );
-        return distance >= 1 && distance <= 2 &&
-          (room.waterSpaces.some((water) => water.id === space.id) || room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked)) &&
-          !room.rafts.some((raft) => raft.locationId === space.id) &&
-          room.explorers.filter((explorer) =>
-            explorer.locationId === space.id &&
-            !explorer.lost &&
-            !aboardIds.includes(explorer.id)
-          ).length + aboardIds.length <= EXPLORER_SPACE_CAPACITY;
+        if (distance < 1 || distance > 2 || !isWaterSpace(space)) return false;
+        if (
+          room.rafts.some((raft) => raft.locationId === space.id) ||
+          room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === space.id) ||
+          !hasCapacity(space.id)
+        ) return false;
+        if (distance === 1) return true;
+        return allSpaces.some((middle) =>
+          areAdjacent(selectedRaftSpace, middle) &&
+          areAdjacent(middle, space) &&
+          isWaterSpace(middle) &&
+          !room.rafts.some((raft) => raft.locationId === middle.id) &&
+          !room.creatures.some((creature) =>
+            (creature.type === "kaiju" || creature.type === "sea-serpent") &&
+            creature.locationId === middle.id
+          ) &&
+          hasCapacity(middle.id)
+        );
       }).map((space) => space.id));
     }
     if (activeAbility === "dolphin" && selectedExplorer?.swimming && selectedTile) {
+      const isWaterSpace = (space: TileView | WaterSpaceView) =>
+        room.waterSpaces.some((water) => water.id === space.id) ||
+        room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked);
+      const hasCapacity = (locationId: string) =>
+        room.explorers.filter((explorer) =>
+          explorer.locationId === locationId &&
+          !explorer.lost &&
+          explorer.id !== selectedExplorer.id
+        ).length < EXPLORER_SPACE_CAPACITY;
       return new Set(allSpaces.filter((space) => {
         const distance = Math.max(
           Math.abs(selectedTile.q - space.q),
           Math.abs(selectedTile.r - space.r),
           Math.abs(selectedTile.q + selectedTile.r - space.q - space.r)
         );
-        return distance >= 1 && distance <= 2 &&
-          room.explorers.filter((explorer) =>
-            explorer.locationId === space.id &&
-            !explorer.lost &&
-            explorer.id !== selectedExplorer.id
-          ).length < EXPLORER_SPACE_CAPACITY;
+        const targetTile = room.tiles.find((tile) => tile.id === space.id);
+        const targetRaft = room.rafts.find((raft) => raft.locationId === space.id);
+        if (
+          distance < 1 ||
+          distance > 2 ||
+          targetTile?.isRescue ||
+          targetTile?.blocked ||
+          room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === space.id) ||
+          !hasCapacity(space.id) ||
+          Boolean(targetRaft && room.explorers.filter((explorer) => explorer.raftId === targetRaft.id).length >= 3)
+        ) return false;
+        if (distance === 1) return true;
+        return allSpaces.some((middle) =>
+          areAdjacent(selectedTile, middle) &&
+          areAdjacent(middle, space) &&
+          isWaterSpace(middle) &&
+          !room.rafts.some((raft) => raft.locationId === middle.id) &&
+          !room.creatures.some((creature) => creature.locationId === middle.id) &&
+          hasCapacity(middle.id)
+        );
       }).map((space) => space.id));
     }
     if (activeAbility === "dive" && selectedCreature) {
       return new Set(room.waterSpaces.filter((space) => !room.creatures.some((creature) => creature.locationId === space.id)).map((space) => space.id));
     }
-    if (selectedExplorer && selectedTile) return new Set(allSpaces.filter((space) =>
-      areAdjacent(selectedTile, space) &&
-      room.explorers.filter((explorer) =>
+    if (selectedExplorer && selectedTile) return new Set(allSpaces.filter((space) => {
+      if (!areAdjacent(selectedTile, space)) return false;
+      const targetTile = room.tiles.find((tile) => tile.id === space.id);
+      if (
+        targetTile?.blocked ||
+        room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === space.id) ||
+        (targetTile?.isRescue && !selectedExplorer.raftId)
+      ) return false;
+      if (!targetTile?.isRescue && room.explorers.filter((explorer) =>
         explorer.locationId === space.id &&
         !explorer.lost &&
         explorer.id !== selectedExplorer.id
-      ).length < EXPLORER_SPACE_CAPACITY
-    ).map((space) => space.id));
+      ).length >= EXPLORER_SPACE_CAPACITY) return false;
+      const destinationRaft = room.rafts.find((raft) => raft.locationId === space.id);
+      if (destinationRaft && room.explorers.filter((explorer) =>
+        explorer.raftId === destinationRaft.id &&
+        !explorer.lost &&
+        !explorer.rescued
+      ).length >= 3) return false;
+      const sourceStable = Boolean(
+        selectedExplorer.raftId ||
+        room.tiles.some((tile) => tile.id === selectedExplorer.locationId && tile.active)
+      );
+      const targetStable = Boolean(destinationRaft || targetTile?.active);
+      return !(!sourceStable || !targetStable) || !selectedExplorer.swamThisTurn;
+    }).map((space) => space.id));
     if (selectedRaft && selectedRaftSpace) {
       const aboardIds = room.explorers
         .filter((explorer) => explorer.raftId === selectedRaft.id && !explorer.lost && !explorer.rescued)
@@ -1209,6 +1609,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
         areAdjacent(selectedRaftSpace, space) &&
         (room.waterSpaces.some((water) => water.id === space.id) || room.tiles.some((tile) => tile.id === space.id && !tile.active && !tile.blocked)) &&
         !room.rafts.some((raft) => raft.locationId === space.id) &&
+        !room.creatures.some((creature) => creature.type === "kaiju" && creature.locationId === space.id) &&
         room.explorers.filter((explorer) =>
           explorer.locationId === space.id &&
           !explorer.lost &&
@@ -1228,6 +1629,10 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
 
   const handleTileClick = (tile: TileView) => {
     if (!room) return;
+    if (useGameStore.getState().markerHotkeyPressed) {
+      placeMarker(tile.id);
+      return;
+    }
     if (myTurn && room.turnPhase === "setup-explorer" && moveTargets.has(tile.id)) {
       socket.emit("placeExplorer", tile.id, (result) => !result.ok && showNotice(result.error ?? "放置失败"));
       return;
@@ -1250,7 +1655,12 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   };
 
   const handleTarget = (targetId: string) => {
-    if (!room || !moveTargets.has(targetId)) return;
+    if (!room) return;
+    if (useGameStore.getState().markerHotkeyPressed) {
+      placeMarker(targetId);
+      return;
+    }
+    if (!moveTargets.has(targetId)) return;
     if (room.pendingChoice?.type === "displace") {
       socket.emit("resolveDisplacement", targetId, (result) => {
         if (!result.ok) showNotice(result.error ?? "推离失败");
@@ -1282,6 +1692,13 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
     }
   };
 
+  const placeMarker = (locationId: string) => {
+    const ownMarker = room?.markers.find((marker) => marker.playerId === clientId);
+    socket.emit("setMapMarker", ownMarker?.locationId === locationId ? null : locationId, (result) => {
+      if (!result.ok) showNotice(result.error ?? "标记失败");
+    });
+  };
+
   const handleRaftClick = (raft: RaftView) => {
     if (!room || !myTurn || room.turnPhase !== "action") return;
     if (selectedExplorerId && moveTargets.has(raft.locationId)) {
@@ -1294,9 +1711,14 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   return (
     <>
       <DayLighting stage={dayStage} />
+      {room && (
+        <MarkerPointerController
+          spaces={allSpaces}
+          onPlace={placeMarker}
+        />
+      )}
       <group scale={BOARD_SCALE}>
         <Ocean stage={dayStage} />
-        <OceanDecorations spaces={oceanDecorations} />
         {room && <RouteGrid spaces={allSpaces} tiles={room.tiles} />}
         <Sparkles count={80} scale={[20, 1, 20]} size={1.4} speed={0.2} color={dayStage.sparkle} position-y={0.1} />
         {room?.creatureRoll && room.creatureRollId > 0 && creatureRollEvent && (
@@ -1305,6 +1727,7 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
             roll={room.creatureRoll}
             rollId={room.creatureRollId}
             rolledAt={creatureRollEvent.at}
+            faceTextures={dieFaceTextures}
           />
         )}
         {room?.tiles.length ? (
@@ -1313,28 +1736,54 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
               <Tile
                 key={tile.id}
                 tile={tile}
-                highlighted={moveTargets.has(tile.id) || sinkTargets.has(tile.id)}
+                highlighted={markerHotkeyPressed || moveTargets.has(tile.id) || sinkTargets.has(tile.id)}
                 selected={selectedTile?.id === tile.id}
+                kaijuPresent={room.creatures.some((creature) =>
+                  creature.type === "kaiju" && creature.locationId === tile.id
+                )}
                 suppressReveal={sinkingTileIds.has(tile.id)}
                 onClick={() => handleTileClick(tile)}
               />
             ))}
+            {room.markers.map((marker) => {
+              const space = allSpaces.find((candidate) => candidate.id === marker.locationId);
+              const player = room.players.find((candidate) => candidate.id === marker.playerId);
+              if (!space || !player) return null;
+              const { x, z } = hexToWorld(space);
+              return (
+                <group key={marker.playerId} position={[x, 0, z]}>
+                  <MapMarker color={colorMap[player.color]} name={player.name} />
+                </group>
+              );
+            })}
             {sinkingTiles.map((tile) => <SinkingTile key={`sinking-${tile.id}`} tile={tile} />)}
+            {whirlpoolEffects.map((effect) => {
+              const tile = room.tiles.find((candidate) => candidate.id === effect.tileId);
+              return tile ? <WhirlpoolEffect key={effect.id} tile={tile} /> : null;
+            })}
             {room.waterSpaces.map((space) => (
-              <WaterTarget key={space.id} space={space} highlighted={moveTargets.has(space.id)} onClick={() => handleTarget(space.id)} />
+              <WaterTarget key={space.id} space={space} highlighted={markerHotkeyPressed || moveTargets.has(space.id)} onClick={() => handleTarget(space.id)} />
             ))}
             {room.tiles.map((tile) => (
               <SunkenTileTarget
                 key={`sunken-target-${tile.id}`}
                 tile={tile}
-                highlighted={moveTargets.has(tile.id)}
+                highlighted={markerHotkeyPressed || moveTargets.has(tile.id)}
                 onClick={() => handleTarget(tile.id)}
               />
             ))}
             {room.rafts.map((raft) => {
               const space = allSpaces.find((item) => item.id === raft.locationId);
               if (!space) return null;
-              return <RaftPiece key={raft.id} raft={raft} space={space} selected={raft.id === selectedRaftId} onClick={() => handleRaftClick(raft)} />;
+              return (
+                <RaftPiece
+                  key={raft.id}
+                  raft={raft}
+                  space={space}
+                  selected={raft.id === selectedRaftId}
+                  onClick={() => useGameStore.getState().markerHotkeyPressed ? placeMarker(raft.locationId) : handleRaftClick(raft)}
+                />
+              );
             })}
             {room.creatures.map((creature) => {
               const space = allSpaces.find((item) => item.id === creature.locationId);
@@ -1353,11 +1802,15 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                   space={space}
                   selected={creature.id === selectedCreatureId}
                   placement={unitPlacements.get(creature.id)}
-                  onClick={() => selectable && selectCreature(creature.id === selectedCreatureId ? null : creature.id)}
+                  onClick={() => {
+                    if (useGameStore.getState().markerHotkeyPressed) placeMarker(creature.locationId);
+                    else if (selectable) selectCreature(creature.id === selectedCreatureId ? null : creature.id);
+                  }}
                 />
               );
             })}
             {room.explorers.map((explorer, index) => {
+              if (explorer.rescued || !explorer.locationId) return null;
               const player = room.players.find((candidate) => candidate.id === explorer.ownerId);
               if (!player) return null;
               const selectable =
@@ -1385,7 +1838,10 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                     explorer.value !== undefined &&
                     (room.turnPhase === "setup-explorer" || room.turnPhase === "setup-raft")
                   }
-                  onClick={() => selectable && selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id)}
+                  onClick={() => {
+                    if (useGameStore.getState().markerHotkeyPressed) placeMarker(explorer.locationId!);
+                    else if (selectable) selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id);
+                  }}
                 />
               );
             })}
