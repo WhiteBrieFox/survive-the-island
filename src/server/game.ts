@@ -1040,7 +1040,16 @@ export function useAbility(room: GameRoom, playerId: string, ability: AbilityTyp
     resolveInteractions(room, targetId);
   } else if (ability === "dive") {
     const creature = room.creatures.find((item) => item.id === actorId);
-    if (!creature || !targetId || !isWater(room, targetId) || room.creatures.some((item) => item.locationId === targetId)) throw new Error("潜水目标不合法");
+    const occupied = targetId && (
+      room.creatures.some((item) => item.locationId === targetId) ||
+      room.explorers.some((item) =>
+        item.locationId === targetId && !item.rescued && !item.lost
+      ) ||
+      room.rafts.some((item) => item.locationId === targetId)
+    );
+    if (!creature || !targetId || !isWater(room, targetId) || occupied) {
+      throw new Error("潜水目标必须是空水域");
+    }
     creature.locationId = targetId;
   } else if (ability === "creature-die") {
     player.abilities.splice(index, 1);

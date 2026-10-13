@@ -191,9 +191,11 @@ const layers: Record<SoundId, SoundLayer[]> = {
     { src: `${kenney}impact-soft.ogg`, volume: 0.52, delay: 0.22 }
   ],
   "whirlpool": [
-    { src: `${mixkit}swimming.mp3`, volume: 0.48, playbackRate: 0.62, stopAfter: 1.5 },
-    { src: `${mixkit}rumble.mp3`, volume: 0.34, playbackRate: 1.18, stopAfter: 1.45 },
-    { src: `${mixkit}water-splash.mp3`, volume: 0.38, delay: 0.5, playbackRate: 0.72, stopAfter: 0.9 }
+    { src: `${mixkit}whoosh.mp3`, volume: 0.62, playbackRate: 0.68, stopAfter: 0.9 },
+    { src: `${mixkit}swimming.mp3`, volume: 0.68, delay: 0.08, playbackRate: 0.58, stopAfter: 1.65 },
+    { src: `${mixkit}rumble.mp3`, volume: 0.48, delay: 0.05, playbackRate: 1.08, stopAfter: 1.55 },
+    { src: `${mixkit}water-splash.mp3`, volume: 0.58, delay: 0.62, playbackRate: 0.68, stopAfter: 1.0 },
+    { src: `${kenney}impact-heavy.ogg`, volume: 0.38, delay: 0.92, playbackRate: 0.82 }
   ],
   "volcano": [
     { src: `${mixkit}rumble.mp3`, volume: 0.5, playbackRate: 0.76, stopAfter: 1.7 },
@@ -239,7 +241,7 @@ export const soundDefinitions: SoundDefinition[] = [
   { id: "kaiju-move", label: "巨兽移动", category: "creature", description: "真实巨型脚步下铺持续低频震动。", duration: "0.9s", source: "Mixkit" },
   { id: "kaiju-attack", label: "巨兽撞击", category: "creature", description: "巨兽吼叫、重击与木材碎裂。", duration: "1.25s", source: "Mixkit + Kenney CC0" },
   { id: "unit-displaced", label: "单位被推离", category: "movement", description: "快速位移掠过后接软质落点。", duration: "0.5s", source: "Mixkit + Kenney CC0" },
-  { id: "whirlpool", label: "漩涡出现", category: "board", description: "减速水流、低频吸力与下沉水花。", duration: "1.5s", source: "Mixkit" },
+  { id: "whirlpool", label: "漩涡出现", category: "board", description: "吸入掠过声、持续旋流、低频吸力与重水花。", duration: "1.7s", source: "Mixkit + Kenney CC0" },
   { id: "volcano", label: "火山爆发", category: "board", description: "深层震动、远距离爆炸和碎石落点。", duration: "1.7s", source: "Mixkit + Kenney CC0" },
   { id: "game-finish", label: "远征结算", category: "reward", description: "完整成功乐句、明亮确认和远处木船海浪。", duration: "1.9s", source: "Mixkit" }
 ];

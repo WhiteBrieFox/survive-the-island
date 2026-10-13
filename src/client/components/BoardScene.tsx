@@ -720,9 +720,17 @@ function Tile({
           scale={0.86}
         />
         {highlighted && (
-          <mesh rotation-x={-Math.PI / 2} position-y={0.22}>
+          <mesh rotation-x={-Math.PI / 2} position-y={0.22} renderOrder={20}>
             <ringGeometry args={[0.82, 1.02, 32]} />
-            <meshBasicMaterial color="#fff1a8" transparent opacity={0.92} />
+            <meshBasicMaterial
+              color="#fff1a8"
+              transparent
+              opacity={0.92}
+              depthTest={false}
+              depthWrite={false}
+              fog={false}
+              toneMapped={false}
+            />
           </mesh>
         )}
       </group>
@@ -761,9 +769,17 @@ function Tile({
       </mesh>
       <TerrainDetails terrain={tile.terrain} tileId={tile.id} makeRoomForKaiju={kaijuPresent} />
       {(highlighted || selected) && (
-        <mesh rotation-x={-Math.PI / 2} position-y={0.28}>
+        <mesh rotation-x={-Math.PI / 2} position-y={0.28} renderOrder={20}>
           <ringGeometry args={[0.72, 0.86, 6]} />
-          <meshBasicMaterial color={highlighted ? "#fff1a8" : "#ffffff"} transparent opacity={0.9} />
+          <meshBasicMaterial
+            color={highlighted ? "#fff1a8" : "#ffffff"}
+            transparent
+            opacity={0.9}
+            depthTest={!highlighted}
+            depthWrite={false}
+            fog={!highlighted}
+            toneMapped={!highlighted}
+          />
         </mesh>
       )}
     </group>
@@ -880,11 +896,27 @@ function WaterTarget({ space, highlighted, onClick }: { space: WaterSpaceView; h
     >
       <mesh renderOrder={8}>
         <circleGeometry args={[1.02, 6]} />
-        <meshBasicMaterial color="#fff1a8" transparent opacity={0.12} depthWrite={false} />
+        <meshBasicMaterial
+          color="#fff1a8"
+          transparent
+          opacity={0.12}
+          depthTest={false}
+          depthWrite={false}
+          fog={false}
+          toneMapped={false}
+        />
       </mesh>
       <mesh position-z={0.008} renderOrder={9}>
         <ringGeometry args={[0.58, 0.86, 6]} />
-        <meshBasicMaterial color="#fff1a8" transparent opacity={0.94} depthWrite={false} />
+        <meshBasicMaterial
+          color="#fff1a8"
+          transparent
+          opacity={0.94}
+          depthTest={false}
+          depthWrite={false}
+          fog={false}
+          toneMapped={false}
+        />
       </mesh>
     </group>
   );
@@ -895,13 +927,29 @@ function SunkenTileTarget({ tile, highlighted, onClick }: { tile: TileView; high
   const { x, z } = hexToWorld(tile);
   return (
     <group position={[x, -0.4, z]} onClick={(event) => { event.stopPropagation(); onClick(); }}>
-      <mesh rotation-x={-Math.PI / 2}>
+      <mesh rotation-x={-Math.PI / 2} renderOrder={20}>
         <circleGeometry args={[0.84, 32]} />
-        <meshBasicMaterial color="#fff1a8" transparent opacity={0.08} depthWrite={false} />
+        <meshBasicMaterial
+          color="#fff1a8"
+          transparent
+          opacity={0.08}
+          depthTest={false}
+          depthWrite={false}
+          fog={false}
+          toneMapped={false}
+        />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position-y={0.006}>
+      <mesh rotation-x={-Math.PI / 2} position-y={0.006} renderOrder={21}>
         <ringGeometry args={[0.62, 0.84, 6]} />
-        <meshBasicMaterial color="#fff1a8" transparent opacity={0.9} depthWrite={false} />
+        <meshBasicMaterial
+          color="#fff1a8"
+          transparent
+          opacity={0.9}
+          depthTest={false}
+          depthWrite={false}
+          fog={false}
+          toneMapped={false}
+        />
       </mesh>
     </group>
   );
@@ -1573,7 +1621,13 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
       }).map((space) => space.id));
     }
     if (activeAbility === "dive" && selectedCreature) {
-      return new Set(room.waterSpaces.filter((space) => !room.creatures.some((creature) => creature.locationId === space.id)).map((space) => space.id));
+      return new Set(room.waterSpaces.filter((space) =>
+        !room.creatures.some((creature) => creature.locationId === space.id) &&
+        !room.explorers.some((explorer) =>
+          explorer.locationId === space.id && !explorer.rescued && !explorer.lost
+        ) &&
+        !room.rafts.some((raft) => raft.locationId === space.id)
+      ).map((space) => space.id));
     }
     if (selectedExplorer && selectedTile) return new Set(allSpaces.filter((space) => {
       if (!areAdjacent(selectedTile, space)) return false;
@@ -1700,7 +1754,12 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
   };
 
   const handleRaftClick = (raft: RaftView) => {
-    if (!room || !myTurn || room.turnPhase !== "action") return;
+    if (!room || !myTurn) return;
+    if (room.pendingChoice?.type === "displace" && moveTargets.has(raft.locationId)) {
+      handleTarget(raft.locationId);
+      return;
+    }
+    if (room.turnPhase !== "action") return;
     if (selectedExplorerId && moveTargets.has(raft.locationId)) {
       handleTarget(raft.locationId);
       return;
@@ -1804,6 +1863,9 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                   placement={unitPlacements.get(creature.id)}
                   onClick={() => {
                     if (useGameStore.getState().markerHotkeyPressed) placeMarker(creature.locationId);
+                    else if (room.pendingChoice?.type === "displace" && moveTargets.has(creature.locationId)) {
+                      handleTarget(creature.locationId);
+                    }
                     else if (selectable) selectCreature(creature.id === selectedCreatureId ? null : creature.id);
                   }}
                 />
@@ -1840,6 +1902,9 @@ export function BoardScene({ room }: { room: PublicRoomState | null }) {
                   }
                   onClick={() => {
                     if (useGameStore.getState().markerHotkeyPressed) placeMarker(explorer.locationId!);
+                    else if (room.pendingChoice?.type === "displace" && moveTargets.has(explorer.locationId!)) {
+                      handleTarget(explorer.locationId!);
+                    }
                     else if (selectable) selectExplorer(explorer.id === selectedExplorerId ? null : explorer.id);
                   }}
                 />

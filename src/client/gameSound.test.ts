@@ -13,6 +13,7 @@ describe("soundForGameEvent", () => {
     expect(soundForGameEvent(event("tile-sunk"), room)).toBe("tile-sink");
     expect(soundForGameEvent(event("raft-revealed"), room)).toBe("raft-reveal");
     expect(soundForGameEvent(event("ability-drawn"), room)).toBe("ability-draw");
+    expect(soundForGameEvent(event("whirlpool"), room)).toBe("whirlpool");
     expect(soundForGameEvent(event("game-finished"), room)).toBe("game-finish");
     expect(soundForGameEvent(event("turn-started"), room)).toBeNull();
   });

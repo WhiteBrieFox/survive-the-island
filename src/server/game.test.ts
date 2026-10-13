@@ -483,6 +483,32 @@ describe("complete game core", () => {
     expect(swimmer.locationId).toBe(route.source.id);
   });
 
+  it("only lets dive move a creature to completely empty water", () => {
+    const room = startedRoom();
+    const creature = room.creatures[0];
+    const occupiedByRaft = room.rafts[0].locationId;
+    const occupiedByExplorer = room.waterSpaces.find((space) =>
+      !room.rafts.some((raft) => raft.locationId === space.id) &&
+      !room.creatures.some((item) => item.locationId === space.id)
+    )!;
+    const emptyWater = room.waterSpaces.find((space) =>
+      space.id !== occupiedByExplorer.id &&
+      !room.rafts.some((raft) => raft.locationId === space.id) &&
+      !room.creatures.some((item) => item.locationId === space.id)
+    )!;
+    const explorer = room.explorers.find((item) => item.ownerId === "guest")!;
+    explorer.locationId = explorer.tileId = occupiedByExplorer.id;
+    explorer.raftId = null;
+    explorer.swimming = true;
+    room.players.find((player) => player.id === "host")!.abilities.push("dive");
+
+    expect(() => useAbility(room, "host", "dive", creature.id, occupiedByRaft)).toThrow(/空水域/);
+    expect(() => useAbility(room, "host", "dive", creature.id, occupiedByExplorer.id)).toThrow(/空水域/);
+
+    useAbility(room, "host", "dive", creature.id, emptyWater.id);
+    expect(creature.locationId).toBe(emptyWater.id);
+  });
+
   it("keeps all three turn stages separate", () => {
     const room = startedRoom();
     endTurn(room);
